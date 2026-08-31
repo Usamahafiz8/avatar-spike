@@ -272,6 +272,30 @@ supports it; their default exports mostly do not. `mouthSmile` / `mouthOpen` /
 `eyesClosed` alone are enough for readable reactions — the full ARKit set is not
 required.
 
+## Fade out after the reaction
+
+The character is **not permanently on the table**. It eases in when a reaction
+fires, holds through it, then fades away — so the felt is clear between events.
+Measured alpha after firing "Win a hand":
+
+    at rest   0.00   mesh.visible = false, costs nothing to render
+    0.4s      1.00   eased in
+    1.6s      1.00   holding through the reaction
+    1.9s      0.66   fade begins, at the hold point
+    2.5s      0.17   perceptually gone
+    4.3s      0.00   mesh switched off
+
+In is fast (~7/s) and out is slower, tied to the `Fade out` slider — a reaction
+should arrive promptly and linger on the way out, not the reverse.
+
+Two controls: **Fade out after reaction** (off = the character stays solid, the
+old behaviour) and **Resting opacity** (0% = vanishes; raise it to leave a faint
+presence between reactions).
+
+Implementation note: `SkeletonUtils.clone` **shares materials** between clones,
+so fading one character faded all of them. Each avatar now gets its own material
+copies at build time.
+
 ## Reaction timing (founder note, 31/08)
 
 Miyagi's review of the first sample: *"probably timing... is the best for this
