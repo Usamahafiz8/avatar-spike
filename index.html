@@ -738,6 +738,9 @@ function applyToon(root, on) {
           color: src.color ? src.color.clone() : new THREE.Color(0xcccccc),
           map: src.map || null, gradientMap: g,
         });
+        // carry the name across — personalisation matches on Wolf3D_Skin etc,
+        // and an unnamed toon material silently never matches
+        o.userData.toonMat.name = src.name;
       }
       o.material = o.userData.toonMat;
     } else if (o.userData.origMat) o.material = o.userData.origMat;
@@ -804,6 +807,7 @@ async function build() {
     avatars.push(av);
     playClip(av, rig.idle, 0);
   }
+  avatars.forEach(applyPersonalisation);   // survives an avatar or model change
   layout(); buildClipButtons(); updateStatic(); invalidate();
 }
 
@@ -1324,7 +1328,11 @@ $('opt-alpha').oninput = e => {
   invalidate();
 };
 $('opt-ondemand').onchange = e => { onDemand = e.target.checked; invalidate(); };
-$('opt-toon').onchange = e => { avatars.forEach(a => applyToon(a.root, e.target.checked)); invalidate(); };
+$('opt-toon').onchange = e => {
+  avatars.forEach(a => applyToon(a.root, e.target.checked));
+  avatars.forEach(applyPersonalisation);   // toon swap replaces materials
+  invalidate();
+};
 $('opt-shadow').onchange = e => {
   const on = e.target.checked;
   renderer.shadowMap.enabled = on; key.castShadow = on; shadowPlane.visible = on;
@@ -1411,6 +1419,119 @@ function renderMoves() {
     ' Game events (win a hand, BlackJack, lose) still play their own animation regardless.';
 }
 
+// ---- selfie -> personalisation ------------------------------------------
+// No vendor account, no character generation. We read the SKIN and HAIR colour
+// out of the photo and tint the avatar's materials to match.
+//
+// The reasoning: measured against Miyagi's reference, the character is 19% of
+// the felt and its head is ~15px. Facial likeness is physically invisible at
+// that size — what reads as "that's me" is colouring. So this captures most of
+// the perceived personalisation for none of the vendor cost, and it still
+// applies on top of a real Avaturn avatar later.
+const MP_VER = '0.10.14';
+let _landmarker = null;
+
+async function getLandmarker() {
+  if (_landmarker) return _landmarker;
+  const vision = await import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}`);
+  const files = await vision.FilesetResolver.forVisionTasks(
+    `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VER}/wasm`);
+  _landmarker = await vision.FaceLandmarker.createFromOptions(files, {
+    baseOptions: { modelAssetPath:
+      'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task' },
+    runningMode: 'IMAGE', numFaces: 1,
+  });
+  return _landmarker;
+}
+
+// Median beats mean here: a stray highlight or a strand of hair across the
+// cheek drags an average badly, and skin patches are small.
+function medianColour(ctx, pts, r) {
+  const R = [], G = [], B = [];
+  for (const [px, py] of pts) {
+    const d = ctx.getImageData(Math.max(0, px - r), Math.max(0, py - r), r * 2, r * 2).data;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] < 200) continue;
+      R.push(d[i]); G.push(d[i + 1]); B.push(d[i + 2]);
+    }
+  }
+  if (!R.length) return null;
+  const mid = a => a.sort((x, y) => x - y)[a.length >> 1];
+  return new THREE.Color(mid(R) / 255, mid(G) / 255, mid(B) / 255);
+}
+
+async function analyseSelfie(img) {
+  const lm = await getLandmarker();
+  const res = lm.detect(img);
+  if (!res.faceLandmarks?.length) return { error: 'no face found' };
+  const pts = res.faceLandmarks[0];
+  const W = img.naturalWidth, H = img.naturalHeight;
+  const cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(img, 0, 0);
+  const at = i => [Math.round(pts[i].x * W), Math.round(pts[i].y * H)];
+
+  // cheeks + forehead centre: the largest patches of unobstructed skin
+  const skin = medianColour(ctx, [at(50), at(280), at(101), at(330), at(9)], Math.max(3, W * 0.012));
+
+  // hair: straight up from the brow by ~40% of face height. Misses bald heads
+  // and hats, which is why the result is shown for confirmation.
+  const brow = at(10), chin = at(152);
+  const faceH = Math.abs(chin[1] - brow[1]);
+  const hairY = Math.max(2, brow[1] - faceH * 0.40);
+  const hair = medianColour(ctx, [[brow[0], hairY], [brow[0] - faceH * 0.15, hairY + faceH * 0.08],
+                                  [brow[0] + faceH * 0.15, hairY + faceH * 0.08]], Math.max(3, W * 0.010));
+  return { skin, hair };
+}
+
+// Tint = wanted / what the texture already is, so the texture's own shading
+// survives. Setting material.color directly would flatten it.
+const _texAvg = new Map();
+function textureAverage(mat) {
+  if (_texAvg.has(mat.uuid)) return _texAvg.get(mat.uuid);
+  let avg = new THREE.Color(0.5, 0.5, 0.5);
+  const im = mat.map?.image;
+  if (im) {
+    const cv = document.createElement('canvas');
+    const n = 64; cv.width = n; cv.height = n;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    try {
+      ctx.drawImage(im, 0, 0, n, n);
+      const d = ctx.getImageData(0, 0, n, n).data;
+      let r = 0, g = 0, b = 0, c = 0;
+      for (let i = 0; i < d.length; i += 4) { if (d[i+3] < 200) continue; r += d[i]; g += d[i+1]; b += d[i+2]; c++; }
+      if (c) avg = new THREE.Color(r / c / 255, g / c / 255, b / c / 255);
+    } catch {}                       // tainted canvas: fall back to grey
+  }
+  _texAvg.set(mat.uuid, avg);
+  return avg;
+}
+
+const SKIN_MATS = ['Wolf3D_Skin', 'Wolf3D_Body'];
+const HAIR_MATS = ['Wolf3D_Hair'];
+let personalisation = null;          // { skin, hair } or null
+
+function applyPersonalisation(av) {
+  if (!av) return;
+  for (const m of av.meshes) {
+    const mats = Array.isArray(m.material) ? m.material : [m.material];
+    for (const mat of mats) {
+      const name = mat.name || '';
+      const want = personalisation && (SKIN_MATS.includes(name) ? personalisation.skin
+                 : HAIR_MATS.includes(name) ? personalisation.hair : null);
+      if (!want) { if (mat.userData.tinted) { mat.color.setRGB(1, 1, 1); mat.userData.tinted = false; } continue; }
+      const avg = textureAverage(mat);
+      mat.color.setRGB(
+        THREE.MathUtils.clamp(want.r / Math.max(0.08, avg.r), 0.25, 2.2),
+        THREE.MathUtils.clamp(want.g / Math.max(0.08, avg.g), 0.25, 2.2),
+        THREE.MathUtils.clamp(want.b / Math.max(0.08, avg.b), 0.25, 2.2));
+      mat.userData.tinted = true;
+    }
+  }
+  invalidate();
+}
+
 // ---- avatar setup sheet ----
 const sheet = $('sheet');
 const openSheet  = () => sheet.classList.add('on');
@@ -1421,12 +1542,37 @@ sheet.querySelector('.scrim').onclick = closeSheet;
 
 // Selfie: preview only. Generating a character from it needs a vendor account,
 // and a mock that pretends to work would be worse than an honest gap.
-$('selfie').onchange = e => {
+$('selfie').onchange = async e => {
   const f = e.target.files?.[0];
   if (!f) return;
-  $('shot').src = URL.createObjectURL(f);
+  const img = $('shot');
+  img.src = URL.createObjectURL(f);
   $('shotWrap').classList.add('on');
-  $('shotNote').textContent = `${f.name} — ${(f.size / 1024).toFixed(0)} KB. Held locally; nothing is uploaded.`;
+  const note = $('shotNote');
+  note.textContent = 'Reading your colours\u2026';
+  await new Promise(r => { img.onload = r; img.onerror = r; });
+  try {
+    const out = await analyseSelfie(img);
+    if (out.error) {
+      note.innerHTML = `<b>No face found.</b> Try a clearer, front-facing photo \u2014 or pick a character below.`;
+      return;
+    }
+    personalisation = out;
+    avatars.forEach(applyPersonalisation);
+    const hex = c => '#' + c.getHexString();
+    note.innerHTML = `Matched your colouring \u2014 ` +
+      `<span style="display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;background:${hex(out.skin)};border:1px solid #0006"></span> skin, ` +
+      `<span style="display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;background:${hex(out.hair)};border:1px solid #0006"></span> hair. ` +
+      `Nothing left your phone. <a href="#" id="resetTint" style="color:var(--lime)">Undo</a>`;
+    $('resetTint').onclick = ev => {
+      ev.preventDefault();
+      personalisation = null;
+      avatars.forEach(applyPersonalisation);
+      note.textContent = 'Colouring reset.';
+    };
+  } catch (err) {
+    note.innerHTML = `<b>Could not read that photo.</b> ${err.message}`;
+  }
 };
 
 // Load a real avatar GLB from disk. This is the path that already works: point

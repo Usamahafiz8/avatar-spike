@@ -254,6 +254,39 @@ This costs nothing per user: clips are shared files, so a loadout is just a
 list of names on the profile. It is also the natural shape for a premium
 unlock — more slots, or moves that have to be earned.
 
+## Selfie personalisation — no vendor account
+
+The selfie step is **live**, and needs no avatar vendor. MediaPipe
+FaceLandmarker (lazy-loaded from CDN on first use) finds the face in the photo,
+then the skin tone and hair colour are sampled and tinted onto the avatar's
+materials.
+
+    cheeks + forehead centre  ->  Wolf3D_Skin, Wolf3D_Body
+    ~40% of face height above the brow  ->  Wolf3D_Hair
+
+**Why colour rather than face shape.** Measured against Miyagi's reference, the
+character is 19% of the felt and its head is ~15px. Facial likeness is
+physically invisible at that size — what reads as "that's me" is colouring. So
+this captures most of the perceived personalisation for none of the vendor
+cost, and it still applies on top of a real Avaturn avatar later.
+
+Details that matter:
+
+- **Median, not mean.** A highlight or a stray hair across the cheek drags an
+  average badly, and skin patches are small.
+- **Tint = wanted / texture average**, not a flat colour. Setting
+  `material.color` directly would flatten the texture's own shading, so the
+  target is divided by the texture's measured average and clamped.
+- **Nothing is uploaded.** The photo is read into a canvas on the device.
+- Verified end-to-end by feeding the same face at three tones: the avatar's own
+  render returns a 1.0 tint (correct null result), a darkened variant returns
+  skin #c4c5c0 / body #a9aba7 and visibly changes the render.
+
+**Gotcha that cost time:** `applyToon` replaces each material with a fresh
+`MeshToonMaterial`, which has no `name`. Personalisation matches on
+`Wolf3D_Skin` etc, so with toon shading on — the default — it silently never
+matched. The toon material now carries the original name.
+
 ## Avatar setup sheet ("MY CHARACTER")
 
 Tap **MY CHARACTER** on the felt. Three steps, matching Miyagi's flow:
