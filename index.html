@@ -271,7 +271,11 @@
     font-weight: 800; font-size: 12px; color: #fff;
   }
   .pick[aria-pressed="true"] { border-color: var(--lime); }
-  .pick small { display: block; font-size: 9px; color: var(--muted); font-weight: 600; }
+  .pick .who { font-size: 15px; }
+  .pick small {
+    display: block; font-size: 9px; font-weight: 700; color: #eaf6ea;
+    background: rgba(0,0,0,.55); border-radius: 5px; padding: 2px 5px;
+  }
   #sheetClose {
     width: 100%; margin-top: 16px; padding: 12px; border-radius: 12px; cursor: pointer;
     background: transparent; color: var(--muted); border: 1px solid rgba(255,255,255,.12); font: inherit;
@@ -438,17 +442,16 @@
     <input type="file" id="selfie" accept="image/*" hidden>
     <div id="shotWrap"><img id="shot" alt="your selfie"><div class="note" id="shotNote"></div></div>
     <div class="note" id="selfieNote">
-      <b>Not connected yet.</b> Turning a selfie into a character needs an avatar
-      vendor account (Avaturn). Until that exists this step cannot generate
-      anything — so pick a character below, which is the same fallback the real
-      app will use when a selfie fails.
+      Read <b>on your phone</b> and never uploaded. It matches your skin tone and
+      hair colour onto the character. It does not rebuild your face &mdash; in game
+      the head renders about 15px, so colouring is what actually reads as you.
     </div>
 
     <div class="step">2 &middot; Or pick a character</div>
     <div class="picks" id="picks">
-      <div class="pick" data-m="default"  aria-pressed="true">A<small>with face</small></div>
-      <div class="pick" data-m="premade1" aria-pressed="false">B<small>body only</small></div>
-      <div class="pick" data-m="premade2" aria-pressed="false">C<small>body only</small></div>
+      <div class="pick" data-m="default"  aria-pressed="true"><b class="who">A</b><small>with face</small></div>
+      <div class="pick" data-m="premade1" aria-pressed="false"><b class="who">B</b><small>body only</small></div>
+      <div class="pick" data-m="premade2" aria-pressed="false"><b class="who">C</b><small>body only</small></div>
     </div>
 
     <div class="step">3 &middot; Your moves &mdash; pick up to 4</div>
@@ -1430,6 +1433,49 @@ function renderMoves() {
     ' Game events (win a hand, BlackJack, lose) still play their own animation regardless.';
 }
 
+// ---- character thumbnails ------------------------------------------------
+// "A / B / C" told you nothing — you cannot pick a character from a letter.
+// Each tile renders its own avatar once, on a dedicated throwaway renderer
+// (preserveDrawingBuffer, so toDataURL works), then that context is disposed.
+let _thumbsDone = false;
+async function renderThumbs() {
+  if (_thumbsDone) return;
+  _thumbsDone = true;
+  const W = 220, H = 290;
+  const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+  r.setPixelRatio(1); r.setSize(W, H, false);
+  r.outputColorSpace = THREE.SRGBColorSpace;
+  const sc = new THREE.Scene();
+  sc.add(new THREE.HemisphereLight(0xffffff, 0x2f6b45, 2.2));
+  const k = new THREE.DirectionalLight(0xffffff, 1.5); k.position.set(1.5, 3, 4); sc.add(k);
+  const cam = new THREE.PerspectiveCamera(30, W / H, .1, 50);
+  cam.position.set(0, 0, 5);
+
+  for (const tile of $('picks').children) {
+    const key = tile.dataset.m;
+    try {
+      const base = await loadModel(key);
+      const root = cloneSkinned(base.scene);
+      // frame head and shoulders — the part you actually choose between
+      const visH = 2 * 5 * Math.tan(THREE.MathUtils.degToRad(15));
+      const scale = (visH * 3.4) / base.height;          // head ~45% of the tile
+      const charH = base.height * scale;
+      root.scale.setScalar(scale);
+      // put the HEAD CENTRE on the camera axis, not the body's midpoint —
+      // the first version framed everyone's chest and showed three t-shirts
+      root.position.y = -base.minY * scale - HEAD_CENTRE * charH;
+      sc.add(root);
+      r.render(sc, cam);
+      tile.style.backgroundImage = `url(${r.domElement.toDataURL('image/png')})`;
+      tile.style.backgroundSize = 'cover';
+      tile.style.backgroundPosition = 'center top';
+      tile.querySelector('.who')?.remove();
+      sc.remove(root);
+    } catch { /* leave the letter if a model will not load */ }
+  }
+  r.dispose();
+}
+
 // ---- selfie -> personalisation ------------------------------------------
 // No vendor account, no character generation. We read the SKIN and HAIR colour
 // out of the photo and tint the avatar's materials to match.
@@ -1545,7 +1591,7 @@ function applyPersonalisation(av) {
 
 // ---- avatar setup sheet ----
 const sheet = $('sheet');
-const openSheet  = () => sheet.classList.add('on');
+const openSheet  = () => { sheet.classList.add('on'); renderThumbs(); };
 const closeSheet = () => sheet.classList.remove('on');
 $('setupBtn').onclick = openSheet;
 $('sheetClose').onclick = closeSheet;
@@ -1636,7 +1682,7 @@ const randomReaction = () => {
 };
 $('felt').addEventListener('pointerdown', e => { if (!e.target.closest('.panel')) randomReaction(); });
 
-window.__spike = { THREE, get roomBlend(){return roomBlend}, get roomTarget(){return roomTarget},
+window.__spike = { THREE, getLandmarker, get roomBlend(){return roomBlend}, get roomTarget(){return roomTarget},
                    get scene(){return scene}, get camera(){return camera},
                    get avatars(){return avatars}, get renderer(){return renderer},
                    get onScreenPct(){return onScreenPct} };

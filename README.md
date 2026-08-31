@@ -317,6 +317,16 @@ Nothing leaves the device — the selfie is held in an object URL for preview on
 
 ## Fallback avatar picker
 
+Each tile **renders its own avatar** rather than showing a letter — "A / B / C"
+told you nothing, and you cannot choose a character from a letter. They render
+once on first open, on a dedicated throwaway renderer (`preserveDrawingBuffer`,
+so `toDataURL` works), which is then disposed.
+
+Framing note: the first version centred the body and produced three pictures of
+t-shirts. Tiles now put the **head centre** on the camera axis.
+
+
+
 Miyagi's spec calls for a premade picker when a selfie fails. Three avatars are
 wired (A / B / C); all animate identically because they share the RPM rig.
 
