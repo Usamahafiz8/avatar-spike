@@ -546,6 +546,9 @@ const CLIP_FILES = [
   { label: 'Clap',       file: 'M_Standing_Expressions_015', icon: '\u{1F44F}' }, // hands together
   { label: 'Win',        file: 'M_Standing_Expressions_016', icon: '\u{1F3C6}' }, // fist raised high
   { label: 'Lose',       file: 'M_Standing_Expressions_007', icon: '\u{1F614}' }, // slumped, head down
+  // hand-authored — not in any library, see AUTHORED
+  { label: 'Middle finger', authored: true, icon: '\u{1F595}' },
+  { label: 'ROFL',          authored: true, icon: '\u{1F923}' },
 ];
 
 // The player's equipped taunts (Miyagi: "in profile user can choose from 3
@@ -604,11 +607,13 @@ const EFFECTS = {
   'Win':   { kind: 'star',  anchor: 'crown', every: 110, dur: 1300 },
   'Lose':  { kind: 'drop',  anchor: 'brow',  every: 420, dur: 1400 },
   'Laugh': { kind: 'drop',  anchor: 'brow',  every: 520, dur: 1200 },
+  'Middle finger': { kind: 'steam', anchor: 'ears', every: 150, dur: 1200 },
+  'ROFL':          { kind: 'drop',  anchor: 'brow', every: 300, dur: 1100 },
 };
 
 const CLIP_MAP = {
   rpm: { idle: 'F_Standing_Idle_001',
-         map: Object.fromEntries(CLIP_FILES.map(c => [c.label, c.file])) },
+         map: Object.fromEntries(CLIP_FILES.map(c => [c.label, c.authored ? c.label : c.file])) },
 };
 const rigOf = k => CLIP_MAP[MODELS[k].rig];
 
@@ -739,7 +744,7 @@ let sharedClips = null;
 async function loadClipLibrary() {
   if (sharedClips) return sharedClips;
   sharedClips = [];
-  for (const { file } of CLIP_FILES) {
+  for (const { file } of CLIP_FILES.filter(c => c.file)) {
     const g = await loader.loadAsync(`./models/rpm/clips/${file}.glb`);
     const clip = g.animations[0];
     if (!clip) continue;
@@ -756,6 +761,8 @@ async function build() {
   const base = await loadModel(currentModel);
   // a Mixamo body gets the whole shared library; the robot only has its own
   const clips = await loadClipLibrary();   // shared by every character
+  captureBind(base.scene);                 // bind pose for the authored clips
+  const authored = Object.entries(AUTHORED).map(([label, make]) => [label, make()]);
   for (const a of avatars) { a.mixer.stopAllAction(); scene.remove(a.root); }
   avatars = [];
   for (let i = 0; i < count; i++) {
@@ -782,6 +789,7 @@ async function build() {
                  blink: 0, nextBlink: 1 + Math.random() * 4,
                  baseHeight: base.height, baseMinY: base.minY, footY: 0 };
     for (const clip of clips) av.actions[clip.name] = mixer.clipAction(clip);   // SHARED clip objects
+    for (const [label, clip] of authored) av.actions[label] = mixer.clipAction(clip);
     av.alpha = FADE_OUT_IDLE ? IDLE_ALPHA : 1;
     av.alphaTarget = av.alpha;
     setAlpha(av, av.alpha);
@@ -933,6 +941,107 @@ function updateFade(a, dt) {
   a.alpha += (target - a.alpha) * Math.min(1, dt * rate);
   setAlpha(a, a.alpha);
 }
+
+// ---- hand-authored clips -------------------------------------------------
+// Neither "middle finger" nor "rolling on the floor laughing" exists in RPM's
+// library — it is a corporate animation set. But a clip is only bone rotations
+// over time, so we can write them directly.
+//
+// Poses are DELTAS applied to the bind pose, in radians [x,y,z]. Absolute local
+// quaternions would need the rig's exact rest orientation per bone; deltas
+// compose with whatever the bind pose is, which is far more robust.
+const _bindQ = new Map();          // boneName -> bind local quaternion (per model)
+
+function captureBind(root) {
+  _bindQ.clear();
+  root.traverse(o => { if (o.isBone) _bindQ.set(o.name, o.quaternion.clone()); });
+}
+
+function authorClip(name, duration, keys) {
+  const bones = new Set();
+  for (const k of keys) for (const b of Object.keys(k.pose)) bones.add(b);
+  const tracks = [];
+  const _e = new THREE.Euler(), _q = new THREE.Quaternion();
+
+  for (const bone of bones) {
+    const bind = _bindQ.get(bone);
+    if (!bind) continue;                       // bone absent on this rig
+    const times = [], values = [];
+    for (const k of keys) {
+      const d = k.pose[bone] ?? [0, 0, 0];
+      _e.set(d[0], d[1], d[2]);
+      _q.setFromEuler(_e);
+      const out = bind.clone().multiply(_q);   // bind * delta
+      times.push(k.t);
+      values.push(out.x, out.y, out.z, out.w);
+    }
+    tracks.push(new THREE.QuaternionKeyframeTrack(bone + '.quaternion', times, values));
+  }
+
+  // optional hips translation, for anything that leaves a standing pose
+  const hipsMoves = keys.some(k => k.hips);
+  if (hipsMoves) {
+    const times = [], values = [];
+    for (const k of keys) { const h = k.hips ?? [0, 0, 0]; times.push(k.t); values.push(h[0], h[1], h[2]); }
+    tracks.push(new THREE.VectorKeyframeTrack('Hips.position', times, values));
+  }
+  return new THREE.AnimationClip(name, duration, tracks);
+}
+
+const R = Math.PI / 180;
+
+// Axes measured on this rig, not guessed: rotating RightArm about X by -90 lifts
+// the hand 1.53 units (Z only managed 1.11 and swings it sideways), and curling
+// a finger is +X (71% shorter) rather than Z (58%). Getting these wrong is what
+// made the first attempt point at the floor with an open hand.
+const curl = (f, a, b, c) => ({
+  [`RightHand${f}1`]: [a * R, 0, 0], [`RightHand${f}2`]: [b * R, 0, 0], [`RightHand${f}3`]: [c * R, 0, 0],
+});
+const fist = () => ({ ...curl('Index', 92, 95, 80), ...curl('Ring', 92, 95, 80),
+                      ...curl('Pinky', 92, 95, 80), ...curl('Thumb', 45, 50, 40) });
+
+// Hand ends up y=1.31 against a head at 0.75 — raised, forward, near centre.
+const ARM_UP = { RightShoulder: [0, 0, -10 * R], RightArm: [-118 * R, 5 * R, -18 * R],
+                 RightForeArm: [-50 * R, 0, -10 * R], RightHand: [0, 0, 0] };
+
+const AUTHORED = {
+  'Middle finger': () => authorClip('Middle finger', 2.0, [
+    { t: 0.00, pose: {} },
+    { t: 0.28, pose: { ...ARM_UP, ...fist() } },
+    { t: 0.42, pose: { ...ARM_UP, ...fist(), RightArm: [-128 * R, 5 * R, -18 * R] } },  // a jab
+    { t: 1.55, pose: { ...ARM_UP, ...fist() } },
+    { t: 2.00, pose: {} },
+  ]),
+
+  // "Laughing and jumping on the floor."
+  //
+  // There is no floor. The character stands ON the deck at the opponent's seat,
+  // and the deck row paints OVER the canvas — so anything that moves downward
+  // disappears behind the cards. A literal floor-roll is impossible in this
+  // composition, not merely hard.
+  //
+  // So it plays upward instead: head thrown back, body folding and rocking,
+  // knees snapping up alternately, arms flailing. Same "cracking up" energy,
+  // entirely above the deck line.
+  'ROFL': () => authorClip('ROFL', 2.6, [
+    { t: 0.00, pose: {} },
+    { t: 0.22, pose: { Spine: [30 * R, 0, 0], Spine1: [22 * R, 0, 0], Head: [20 * R, 0, 0],
+                       LeftArm: [0, 0, 38 * R], RightArm: [0, 0, -38 * R] } },          // fold forward
+    { t: 0.62, pose: { Hips: [-14 * R, 0, 8 * R], Spine: [-26 * R, 0, 0], Spine1: [-14 * R, 0, 0],
+                       Head: [-34 * R, 0, 0],                                            // head thrown back
+                       LeftUpLeg: [-78 * R, 0, 0], LeftLeg: [88 * R, 0, 0],              // left knee up
+                       LeftArm: [0, 0, 78 * R], RightArm: [0, 0, -52 * R] } },
+    { t: 1.05, pose: { Hips: [-10 * R, 0, -8 * R], Spine: [22 * R, 0, 0], Head: [14 * R, 0, 0],
+                       LeftArm: [0, 0, 46 * R], RightArm: [0, 0, -46 * R] } },           // fold again
+    { t: 1.48, pose: { Hips: [-14 * R, 0, -8 * R], Spine: [-26 * R, 0, 0], Spine1: [-14 * R, 0, 0],
+                       Head: [-34 * R, 0, 0],
+                       RightUpLeg: [-78 * R, 0, 0], RightLeg: [88 * R, 0, 0],            // right knee up
+                       LeftArm: [0, 0, 52 * R], RightArm: [0, 0, -78 * R] } },
+    { t: 1.95, pose: { Spine: [24 * R, 0, 0], Spine1: [16 * R, 0, 0], Head: [16 * R, 0, 0],
+                       LeftArm: [0, 0, 42 * R], RightArm: [0, 0, -42 * R] } },
+    { t: 2.60, pose: {} },
+  ]),
+};
 
 // ---- 2D cartoon VFX ------------------------------------------------------
 // Effects are DOM elements positioned from the HEAD BONE projected to screen,

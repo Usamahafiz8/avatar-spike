@@ -182,6 +182,36 @@ shape is proven here, only the event source changes.
 lose, annoyed, BlackJack, bring back, refuse, win the game) so the whole system
 can be watched without anyone pressing anything. Useful for showing Miyagi.
 
+## Hand-authored moves: Middle finger, ROFL
+
+Miyagi asked for "someone putting the middle finger up" and "laughing and
+jumping on the floor". Neither exists in RPM's library — it is a corporate
+animation set. Rather than wait on filming, both are **written directly in
+code**: a clip is only bone rotations over time, so `authorClip()` builds
+`THREE.AnimationClip` objects from keyframed pose deltas.
+
+Poses are deltas against the captured bind pose, not absolute quaternions, so
+they compose with whatever rest orientation the rig happens to have.
+
+**Rig axes were measured, not guessed.** The first attempt pointed at the floor
+with an open hand because both assumptions were wrong:
+
+    RightArm  rotate X -90  ->  hand rises 1.53   <- correct
+    RightArm  rotate Z -90  ->  hand rises 1.11, swings sideways
+    finger    rotate X +80  ->  71% shorter (curled)  <- correct
+    finger    rotate Z -80  ->  58% shorter
+
+**ROFL cannot be a floor-roll, and that is a composition fact, not a limitation
+of the technique.** The character stands ON the deck and the deck row paints
+OVER the canvas, so anything moving downward vanishes behind the cards — the
+first version showed only two hands above the deck. It now plays *upward*: head
+thrown back, body folding and rocking, knees snapping up alternately, arms
+flailing. Same energy, entirely above the deck line. Both verified in frame.
+
+These are crude next to mocap, and they are meant to be — they prove the route
+and give Miyagi something to react to. The production versions come from
+filming the real move and running it through DeepMotion.
+
 ## Equipped moves (the loadout)
 
 Miyagi: *"maybe in profile user can choose from 3 moves to bring to table. Or 4."*
