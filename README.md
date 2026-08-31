@@ -328,10 +328,15 @@ are **cartoon exaggeration**. A realistic 3D avatar cannot produce that on its
 own, no matter how good the body animation is. But 2D effects painted over the
 top get the same energy for almost nothing:
 
-    Angry   steam puffs venting from both ears
+    Angry   steam puffs venting from both ears   <- the anger tell, Angry only
     Win     stars bursting above the head
     Lose    a sweat drop running down the temple
     Laugh   the same drop, lighter
+    ROFL    the same drop, faster
+
+Every other reaction — Middle finger, Dance, Point, Celebrate, Clap, Shake head
+— plays with **no effect**. Steam is the anger tell; putting it on a second
+reaction dilutes it and reads as a bug.
 
 They are DOM elements driven by CSS keyframes, positioned from the **head bone
 projected to screen space**, so they follow the character as it moves and scale
