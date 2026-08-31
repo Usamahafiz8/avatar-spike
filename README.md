@@ -182,6 +182,25 @@ shape is proven here, only the event source changes.
 lose, annoyed, BlackJack, bring back, refuse, win the game) so the whole system
 can be watched without anyone pressing anything. Useful for showing Miyagi.
 
+## Equipped moves (the loadout)
+
+Miyagi: *"maybe in profile user can choose from 3 moves to bring to table. Or 4."*
+
+Step 3 of the setup sheet is a grid of the 10 reactions; tap to equip up to
+**4**. Equipped moves appear as a quick bar on the felt, and tapping one sends
+that reaction. Choice is saved in `localStorage` and survives a reload
+(wrapped in try/catch — private mode and blocked storage fall back to defaults).
+
+**The loadout limits only PLAYER-SENT reactions.** Game events — win a hand,
+play a BlackJack, lose — still fire their own animation regardless of what is
+equipped, because that is the game reacting, not the player choosing. Mixing
+those two up would mean a player who did not equip "Lose" never reacts to
+losing.
+
+This costs nothing per user: clips are shared files, so a loadout is just a
+list of names on the profile. It is also the natural shape for a premium
+unlock — more slots, or moves that have to be earned.
+
 ## Avatar setup sheet ("MY CHARACTER")
 
 Tap **MY CHARACTER** on the felt. Three steps, matching Miyagi's flow:

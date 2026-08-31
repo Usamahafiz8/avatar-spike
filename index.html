@@ -209,6 +209,31 @@
     100% { transform: translate(calc(-50% + var(--dx,0px)), calc(-50% + var(--fall,80px))) scale(1); opacity: 0; }
   }
 
+  /* ===== equipped-moves quick bar (player-sent reactions) ===== */
+  #quickbar {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    bottom: 30%; z-index: 4; display: flex; gap: 7px;
+    background: rgba(8,20,13,.72); border: 1px solid var(--line);
+    border-radius: 999px; padding: 6px 8px; backdrop-filter: blur(7px);
+  }
+  #quickbar button {
+    width: 40px; height: 40px; border-radius: 50%; border: none; cursor: pointer;
+    background: rgba(255,255,255,.07); font-size: 19px; line-height: 1; padding: 0;
+  }
+  #quickbar button:active { background: rgba(194,245,63,.3); transform: scale(.92); }
+
+  /* ===== loadout picker ===== */
+  .moves { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .move {
+    aspect-ratio: 1; border-radius: 13px; cursor: pointer; border: 2px solid transparent;
+    background: rgba(255,255,255,.05); display: grid; place-items: center; gap: 1px;
+    font-size: 21px; line-height: 1; position: relative;
+  }
+  .move span { font-size: 8.5px; color: var(--muted); font-weight: 700; letter-spacing: .02em; }
+  .move[aria-pressed="true"] { border-color: var(--lime); background: rgba(194,245,63,.14); }
+  .move[aria-pressed="true"] span { color: var(--lime); }
+  .move.full { opacity: .35; }
+
   /* ===== avatar setup sheet ===== */
   #setupBtn {
     position: absolute; top: 3.5%; left: 4%; z-index: 4;
@@ -288,6 +313,8 @@
       <div class="card" id="discard">♣</div>
       <span class="pill on">END TURN</span>
     </div>
+
+    <div id="quickbar"></div>
 
     <div class="layer" id="hand">
       <div id="handcards">
@@ -423,7 +450,11 @@
       <div class="pick" data-m="premade2" aria-pressed="false">C<small>body only</small></div>
     </div>
 
-    <div class="step">3 &middot; Already have an avatar file?</div>
+    <div class="step">3 &middot; Your moves &mdash; pick up to 4</div>
+    <div class="moves" id="moves"></div>
+    <div class="note" id="movesNote"></div>
+
+    <div class="step">4 &middot; Already have an avatar file?</div>
     <label class="bigbtn ghost" for="glbfile">⬆ Load a .glb avatar</label>
     <input type="file" id="glbfile" accept=".glb,model/gltf-binary" hidden>
     <div class="note" id="glbNote">
@@ -504,18 +535,33 @@ const MODELS = {
 // RENDERING all 28 clips to a contact sheet and looking at them — see
 // sheet.html / contact-sheet.png. Regenerate that sheet to pick alternatives.
 const CLIP_FILES = [
-  { label: 'Idle',       file: 'F_Standing_Idle_001'         },  // neutral stand
-  { label: 'Dance 1',    file: 'F_Dances_001'                },  // loose two-step
-  { label: 'Dance 2',    file: 'F_Dances_004'                },  // bigger, leaning
-  { label: 'Laugh',      file: 'F_Talking_Variations_001'    },  // open, animated
-  { label: 'Point',      file: 'M_Standing_Expressions_017'  },  // arm out, points
-  { label: 'Celebrate',  file: 'M_Standing_Expressions_010'  },  // both arms up
-  { label: 'Angry',      file: 'M_Standing_Expressions_012'  },  // fists up, tense
-  { label: 'Shake head', file: 'M_Standing_Expressions_005'  },  // arms out, "no"
-  { label: 'Clap',       file: 'M_Standing_Expressions_015'  },  // hands together
-  { label: 'Win',        file: 'M_Standing_Expressions_016'  },  // fist raised high
-  { label: 'Lose',       file: 'M_Standing_Expressions_007'  },  // slumped, head down
+  { label: 'Idle',       file: 'F_Standing_Idle_001',        icon: '\u{1F610}' }, // neutral stand
+  { label: 'Dance 1',    file: 'F_Dances_001',               icon: '\u{1F57A}' }, // loose two-step
+  { label: 'Dance 2',    file: 'F_Dances_004',               icon: '\u{1F483}' }, // bigger, leaning
+  { label: 'Laugh',      file: 'F_Talking_Variations_001',   icon: '\u{1F602}' }, // open, animated
+  { label: 'Point',      file: 'M_Standing_Expressions_017', icon: '\u{1F449}' }, // arm out, points
+  { label: 'Celebrate',  file: 'M_Standing_Expressions_010', icon: '\u{1F64C}' }, // both arms up
+  { label: 'Angry',      file: 'M_Standing_Expressions_012', icon: '\u{1F620}' }, // fists up, tense
+  { label: 'Shake head', file: 'M_Standing_Expressions_005', icon: '\u{1F645}' }, // arms out, "no"
+  { label: 'Clap',       file: 'M_Standing_Expressions_015', icon: '\u{1F44F}' }, // hands together
+  { label: 'Win',        file: 'M_Standing_Expressions_016', icon: '\u{1F3C6}' }, // fist raised high
+  { label: 'Lose',       file: 'M_Standing_Expressions_007', icon: '\u{1F614}' }, // slumped, head down
 ];
+
+// The player's equipped taunts (Miyagi: "in profile user can choose from 3
+// moves to bring to table. Or 4").
+//
+// IMPORTANT: this limits only PLAYER-SENT reactions. Game events — win a hand,
+// play a BlackJack, lose — still fire their own animation regardless of the
+// loadout, because those are the game reacting, not the player choosing.
+const LOADOUT_MAX = 4;
+const LOADOUT_KEY = 'sbj.loadout.v1';
+let LOADOUT = ['Dance 1', 'Laugh', 'Point', 'Celebrate'];
+try {
+  const saved = JSON.parse(localStorage.getItem(LOADOUT_KEY) || 'null');
+  if (Array.isArray(saved) && saved.length) LOADOUT = saved.slice(0, LOADOUT_MAX);
+} catch {}                       // private mode / blocked storage: keep defaults
+const saveLoadout = () => { try { localStorage.setItem(LOADOUT_KEY, JSON.stringify(LOADOUT)); } catch {} };
 
 // Facial expression per reaction. The avatar exposes mouthSmile, mouthOpen and
 // eyesClosed as morph targets, so reactions can actually show on the face
@@ -1173,6 +1219,48 @@ $('seg-avatar').onclick = async e => {
   $('loading').classList.add('done');
 };
 
+// ---- equipped moves ------------------------------------------------------
+const iconOf = label => CLIP_FILES.find(c => c.label === label)?.icon ?? '\u2753';
+
+function renderQuickbar() {
+  const bar = $('quickbar');
+  bar.innerHTML = '';
+  for (const label of LOADOUT) {
+    const b = document.createElement('button');
+    b.textContent = iconOf(label);
+    b.title = label;
+    b.setAttribute('aria-label', label);
+    b.onclick = ev => { ev.stopPropagation(); triggerAll(label); };
+    bar.appendChild(b);
+  }
+  bar.style.display = LOADOUT.length ? 'flex' : 'none';
+}
+
+function renderMoves() {
+  const wrap = $('moves');
+  wrap.innerHTML = '';
+  const full = LOADOUT.length >= LOADOUT_MAX;
+  for (const { label, icon } of CLIP_FILES) {
+    if (label === 'Idle') continue;                 // the resting loop is not a taunt
+    const on = LOADOUT.includes(label);
+    const d = document.createElement('div');
+    d.className = 'move' + (!on && full ? ' full' : '');
+    d.setAttribute('aria-pressed', String(on));
+    d.innerHTML = icon + '<span>' + label.toUpperCase() + '</span>';
+    d.onclick = () => {
+      const i = LOADOUT.indexOf(label);
+      if (i >= 0) LOADOUT.splice(i, 1);
+      else if (LOADOUT.length < LOADOUT_MAX) LOADOUT.push(label);
+      else return;                                  // at the cap, ignore
+      saveLoadout(); renderMoves(); renderQuickbar();
+    };
+    wrap.appendChild(d);
+  }
+  $('movesNote').innerHTML = `<b style="color:var(--lime)">${LOADOUT.length}/${LOADOUT_MAX}</b> equipped` +
+    (full ? ' — tap one to swap it out.' : '. These are the reactions you can send at the table.') +
+    ' Game events (win a hand, BlackJack, lose) still play their own animation regardless.';
+}
+
 // ---- avatar setup sheet ----
 const sheet = $('sheet');
 const openSheet  = () => sheet.classList.add('on');
@@ -1244,6 +1332,9 @@ $('felt').addEventListener('pointerdown', e => { if (!e.target.closest('.panel')
 window.__spike = { THREE, get scene(){return scene}, get camera(){return camera},
                    get avatars(){return avatars}, get renderer(){return renderer},
                    get onScreenPct(){return onScreenPct} };
+
+renderMoves();
+renderQuickbar();
 
 (async function start() {
   try {
