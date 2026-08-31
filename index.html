@@ -402,7 +402,23 @@ import { GLTFLoader } from './vendor/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from './vendor/utils/SkeletonUtils.js';
 
 const $ = id => document.getElementById(id);
-const showErr = e => { const b = $('err'); b.style.display = 'block'; b.textContent = 'ERROR\n\n' + (e?.stack ?? e); console.error(e); };
+const showErr = e => {
+  const b = $('err');
+  b.style.display = 'block';
+  const msg = String(e?.message ?? e);
+  // A 404 here means the 3D assets are missing. They are not in the repo on
+  // purpose (RPM licence), so a deploy has to run fetch-assets.mjs at build.
+  if (/404|Failed to fetch|NetworkError/i.test(msg) && /\.glb/i.test(msg)) {
+    const file = (msg.match(/[^/\s"]+\.glb/) || ['a model'])[0];
+    b.innerHTML = '<b>3D assets are missing.</b><br><br>Could not load <code>' + file +
+      '</code>.<br><br>The models are not committed to the repo — Ready Player Me\u2019s ' +
+      'licence forbids redistributing them. Run <code>node fetch-assets.mjs</code> locally, ' +
+      'or make sure the deploy runs it as its build command (see netlify.toml).';
+  } else {
+    b.textContent = 'ERROR\n\n' + (e?.stack ?? e);
+  }
+  console.error(e);
+};
 window.addEventListener('error', ev => showErr(ev.error || ev.message));
 
 // Ready Player Me avatar + Ready Player Me animation library.
