@@ -272,6 +272,35 @@ supports it; their default exports mostly do not. `mouthSmile` / `mouthOpen` /
 `eyesClosed` alone are enough for readable reactions — the full ARKit set is not
 required.
 
+## 2D cartoon effects
+
+Miyagi's reference GIFs — steam from the ears, rolling on the floor laughing —
+are **cartoon exaggeration**. A realistic 3D avatar cannot produce that on its
+own, no matter how good the body animation is. But 2D effects painted over the
+top get the same energy for almost nothing:
+
+    Angry   steam puffs venting from both ears
+    Win     stars bursting above the head
+    Lose    a sweat drop running down the temple
+    Laugh   the same drop, lighter
+
+They are DOM elements driven by CSS keyframes, positioned from the **head bone
+projected to screen space**, so they follow the character as it moves and scale
+with it. Doing this inside the 3D scene would mean billboards, shaders and
+sort-order headaches; in the DOM it is a div and an animation.
+
+Every offset is expressed in **head-heights**, not pixels, so the effects stay
+correctly placed at any character size or framing. The head height is measured
+exactly, from the `Head` bone to `HeadTop_End` — roughly 194px in portrait,
+27px in full-body view.
+
+Particles remove themselves on `animationend`; peak counts are ~32 for steam,
+12 for stars, 4 for drops, and the layer returns to 0 between reactions
+(verified — no leak). Toggle with **Cartoon effects** in the dev panel.
+
+**This is the cheapest route to the look Miyagi wants.** New effects are a CSS
+keyframe plus one line in `EFFECTS` — no vendor, no rig, no art budget.
+
 ## Fade out after the reaction
 
 The character is **not permanently on the table**. It eases in when a reaction
