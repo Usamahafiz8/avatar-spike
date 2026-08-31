@@ -602,6 +602,15 @@ const GAME_EVENTS = [
 
 // Which cartoon effect rides along with which reaction.
 //   anchor 'ears'  both sides of the head   'crown' above it   'brow' upper face
+// Portrait is a FACE framing: the character's hands sit outside it horizontally
+// (the resting right hand is at world x=-0.97 against a half-frame of 0.93), so
+// no hand gesture can ever be seen there. These moves pull the camera back for
+// their duration and it eases home afterwards — big face at rest, whole gesture
+// when it matters.
+const NEEDS_ROOM = new Set(['Middle finger', 'ROFL', 'Point', 'Celebrate', 'Clap',
+                            'Dance 1', 'Dance 2', 'Win', 'Shake head']);
+let roomBlend = 0, roomTarget = 0;      // 0 = framing as set, 1 = pulled back
+
 const EFFECTS = {
   'Angry': { kind: 'steam', anchor: 'ears',  every: 95,  dur: 1400 },
   'Win':   { kind: 'star',  anchor: 'crown', every: 110, dur: 1300 },
@@ -813,9 +822,15 @@ function layout() {
   if (!n) return;
   const pos = seats(n);
   const portrait = FRAMING === 'portrait';
+  const blend = portrait ? roomBlend : 0;   // only portrait needs pulling back
 
   // full: size IS the body height. portrait: size is derived from the face.
-  const bodyFrac = portrait ? FACE_FRACTION * HEAD_RATIO : TARGET_FRACTION;
+  const bodyFrac = portrait
+    // Feet sit at FOOT_LINE (46.5% from the top), so only ~46% of the screen
+    // exists above them. A 62%-tall character put its head above the viewport
+    // and the raised hand 230px off-screen; 0.34 leaves room for both.
+    ? THREE.MathUtils.lerp(FACE_FRACTION * HEAD_RATIO, 0.34, blend)
+    : TARGET_FRACTION;
   const charH = n > 2 && !portrait
     ? Math.min(bodyFrac * viewH, (viewW / 4) * 1.45)
     : bodyFrac * viewH;
@@ -829,7 +844,9 @@ function layout() {
     if (portrait) {
       // put the head centre at HEAD_Y; the body runs off the bottom of the
       // felt and is covered by the deck row and the hand, which is fine
-      y = (0.5 - HEAD_Y) * viewH - a.baseMinY * s - HEAD_CENTRE * charH;
+      const portraitY = (0.5 - HEAD_Y) * viewH - a.baseMinY * s - HEAD_CENTRE * charH;
+      const wideY     = (0.5 - FOOT_LINE) * viewH + a.footY;
+      y = THREE.MathUtils.lerp(portraitY, wideY, blend);
     } else {
       y = (0.5 - fy) * viewH + a.footY;
     }
@@ -876,6 +893,7 @@ function triggerAll(label) {
     av.faceTarget = { ...(FACES[label] ?? FACES['Idle']) };
     av.alphaTarget = 1;                       // pop in for the reaction
     runEffect(av, label);
+    if (NEEDS_ROOM.has(label)) roomTarget = 1;
     if (isIdle) return;
     const clipLen = av.actions[name]?.getClip().duration ?? REACTION_HOLD;
     // start fading home before the hold elapses, so it eases out rather than stopping
@@ -885,6 +903,7 @@ function triggerAll(label) {
       playClip(av, rig.idle, FADE_HOME);
       av.faceTarget = { ...FACES['Idle'] };
       av.alphaTarget = IDLE_ALPHA;            // then fade away
+      roomTarget = 0;                         // and the camera eases back in
       clearInterval(av.returnTimer && av.fxTimer); av.fxTimer = null;
     }, startFade * 1000);
   }, i * 60));   // stagger, so a table reads as a crowd not a chorus line
@@ -910,6 +929,7 @@ const invalidate = () => { needsRender = true; };
 const anyPlaying = () => avatars.some(a =>
   a.current?.isRunning() ||
   ['smile','open','squint'].some(k => Math.abs(a.faceTarget[k] - a.face[k]) > .01) ||
+  Math.abs(roomTarget - roomBlend) > .002 ||
   a.blink > 0 ||
   Math.abs((FADE_OUT_IDLE ? a.alphaTarget : 1) - a.alpha) > .002);
 function applyHeadScale(a) { if (a.headBone) a.headBone.scale.setScalar(HEAD_SCALE); }
@@ -999,18 +1019,36 @@ const curl = (f, a, b, c) => ({
 const fist = () => ({ ...curl('Index', 92, 95, 80), ...curl('Ring', 92, 95, 80),
                       ...curl('Pinky', 92, 95, 80), ...curl('Thumb', 45, 50, 40) });
 
-// Hand ends up y=1.31 against a head at 0.75 — raised, forward, near centre.
-const ARM_UP = { RightShoulder: [0, 0, -10 * R], RightArm: [-118 * R, 5 * R, -18 * R],
-                 RightForeArm: [-50 * R, 0, -10 * R], RightHand: [0, 0, 0] };
+// Hand orientation matters more than arm height: the first version held the
+// hand EDGE-ON to the camera, so the gesture was unreadable no matter how well
+// the fingers curled. Measured across candidate rotations, [0,0,45] points the
+// fingers up (0.99) with the palm toward the camera (0.77) — the best of the
+// set. The arm also sits lower than before, which stopped it clipping the top
+// of the frame in portrait.
+const ARM_UP = { RightShoulder: [0, 0, -10 * R], RightArm: [-100 * R, 5 * R, -14 * R],
+                 RightForeArm: [-42 * R, 0, -10 * R], RightHand: [0, 0, 45 * R] };
 
 const AUTHORED = {
-  'Middle finger': () => authorClip('Middle finger', 2.0, [
-    { t: 0.00, pose: {} },
-    { t: 0.28, pose: { ...ARM_UP, ...fist() } },
-    { t: 0.42, pose: { ...ARM_UP, ...fist(), RightArm: [-128 * R, 5 * R, -18 * R] } },  // a jab
-    { t: 1.55, pose: { ...ARM_UP, ...fist() } },
-    { t: 2.00, pose: {} },
-  ]),
+  // Three thrusts, not one held pose. The first version reached the right pose
+  // in 0.25s then sat perfectly still for 1.3s, which reads as a frozen frame
+  // rather than a gesture. The arm now drives up and back through 24 degrees
+  // and the torso follows it.
+  'Middle finger': () => {
+    const up   = a => ({ ...ARM_UP, ...fist(), RightArm: [a * R, 5 * R, -14 * R] });
+    const lean = t => ({ Spine: [0, 0, t * R], Spine1: [0, 0, t * R] });
+    return authorClip('Middle finger', 2.0, [
+      { t: 0.00, pose: {} },
+      { t: 0.16, pose: { ...up(-112), ...lean(-5) } },   // snaps up
+      { t: 0.42, pose: { ...up(-90), ...lean(2) } },    // pull back
+      { t: 0.60, pose: { ...up(-114), ...lean(-6) } },   // thrust
+      { t: 0.80, pose: { ...up(-92), ...lean(2) } },
+      { t: 0.98, pose: { ...up(-114), ...lean(-6) } },   // thrust
+      { t: 1.18, pose: { ...up(-93), ...lean(1) } },
+      { t: 1.36, pose: { ...up(-112), ...lean(-5) } },   // thrust
+      { t: 1.70, pose: { ...up(-104), ...lean(0) } },    // settle, still up
+      { t: 2.00, pose: {} },
+    ]);
+  },
 
   // "Laughing and jumping on the floor."
   //
@@ -1022,23 +1060,23 @@ const AUTHORED = {
   // So it plays upward instead: head thrown back, body folding and rocking,
   // knees snapping up alternately, arms flailing. Same "cracking up" energy,
   // entirely above the deck line.
-  'ROFL': () => authorClip('ROFL', 2.6, [
+  'ROFL': () => authorClip('ROFL', 2.0, [
     { t: 0.00, pose: {} },
-    { t: 0.22, pose: { Spine: [30 * R, 0, 0], Spine1: [22 * R, 0, 0], Head: [20 * R, 0, 0],
+    { t: 0.22, pose: { Spine: [38 * R, 0, 0], Spine1: [28 * R, 0, 0], Head: [26 * R, 0, 0],
                        LeftArm: [0, 0, 38 * R], RightArm: [0, 0, -38 * R] } },          // fold forward
-    { t: 0.62, pose: { Hips: [-14 * R, 0, 8 * R], Spine: [-26 * R, 0, 0], Spine1: [-14 * R, 0, 0],
+    { t: 0.46, pose: { Hips: [-14 * R, 0, 8 * R], Spine: [-26 * R, 0, 0], Spine1: [-14 * R, 0, 0],
                        Head: [-34 * R, 0, 0],                                            // head thrown back
-                       LeftUpLeg: [-78 * R, 0, 0], LeftLeg: [88 * R, 0, 0],              // left knee up
+                       LeftUpLeg: [-95 * R, 0, 0], LeftLeg: [105 * R, 0, 0],              // left knee up
                        LeftArm: [0, 0, 78 * R], RightArm: [0, 0, -52 * R] } },
-    { t: 1.05, pose: { Hips: [-10 * R, 0, -8 * R], Spine: [22 * R, 0, 0], Head: [14 * R, 0, 0],
+    { t: 0.80, pose: { Hips: [-10 * R, 0, -8 * R], Spine: [34 * R, 0, 0], Head: [22 * R, 0, 0],
                        LeftArm: [0, 0, 46 * R], RightArm: [0, 0, -46 * R] } },           // fold again
-    { t: 1.48, pose: { Hips: [-14 * R, 0, -8 * R], Spine: [-26 * R, 0, 0], Spine1: [-14 * R, 0, 0],
+    { t: 1.12, pose: { Hips: [-14 * R, 0, -8 * R], Spine: [-26 * R, 0, 0], Spine1: [-14 * R, 0, 0],
                        Head: [-34 * R, 0, 0],
-                       RightUpLeg: [-78 * R, 0, 0], RightLeg: [88 * R, 0, 0],            // right knee up
+                       RightUpLeg: [-95 * R, 0, 0], RightLeg: [105 * R, 0, 0],            // right knee up
                        LeftArm: [0, 0, 52 * R], RightArm: [0, 0, -78 * R] } },
-    { t: 1.95, pose: { Spine: [24 * R, 0, 0], Spine1: [16 * R, 0, 0], Head: [16 * R, 0, 0],
+    { t: 1.48, pose: { Spine: [24 * R, 0, 0], Spine1: [16 * R, 0, 0], Head: [16 * R, 0, 0],
                        LeftArm: [0, 0, 42 * R], RightArm: [0, 0, -42 * R] } },
-    { t: 2.60, pose: {} },
+    { t: 2.00, pose: {} },
   ]),
 };
 
@@ -1153,6 +1191,10 @@ function tick(now) {
   const active = !onDemand || anyPlaying() || needsRender;
   if (active) {
     for (const a of avatars) { a.mixer.update(dt); applyHeadScale(a); updateFace(a, dt); updateFade(a, dt); }
+    if (Math.abs(roomTarget - roomBlend) > 0.002) {
+      roomBlend += (roomTarget - roomBlend) * Math.min(1, dt * 5);
+      layout();
+    }
     renderer.render(scene, camera);
     needsRender = false;
   }
@@ -1437,7 +1479,8 @@ const randomReaction = () => {
 };
 $('felt').addEventListener('pointerdown', e => { if (!e.target.closest('.panel')) randomReaction(); });
 
-window.__spike = { THREE, get scene(){return scene}, get camera(){return camera},
+window.__spike = { THREE, get roomBlend(){return roomBlend}, get roomTarget(){return roomTarget},
+                   get scene(){return scene}, get camera(){return camera},
                    get avatars(){return avatars}, get renderer(){return renderer},
                    get onScreenPct(){return onScreenPct} };
 

@@ -208,6 +208,29 @@ first version showed only two hands above the deck. It now plays *upward*: head
 thrown back, body folding and rocking, knees snapping up alternately, arms
 flailing. Same energy, entirely above the deck line. Both verified in frame.
 
+### Portrait cannot show a hand gesture — the camera pulls back instead
+
+Portrait is a FACE framing. The character's resting right hand sits at world
+x=-0.97 against a half-frame of 0.93, so **the hands are outside it entirely**.
+The first middle finger looked broken for exactly this reason: correct pose,
+invisible hands.
+
+Moves in `NEEDS_ROOM` now ease the camera back to a wide shot for their
+duration and it eases home afterwards — big face at rest, whole gesture when it
+matters. Fingertip on-screen went from 1% of frames to 84%.
+
+Sizing that pull-back needed care: feet stay at `FOOT_LINE` (46.5% from the
+top), so only ~46% of the screen exists above them. Lerping to a 62%-tall
+character put the head above the viewport and the hand 230px off-screen; 0.34
+leaves room for both.
+
+### Two other things the measurements caught
+
+The middle finger held one pose for 1.3s — a frozen frame, not a gesture. It now
+thrusts three times through 24 degrees with the torso following. And ROFL was a
+2.6s clip cut off at 1.77s by the 2.2s hold, so its last two beats never played;
+it is 2.0s now and completes.
+
 These are crude next to mocap, and they are meant to be — they prove the route
 and give Miyagi something to react to. The production versions come from
 filming the real move and running it through DeepMotion.
