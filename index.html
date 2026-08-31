@@ -405,6 +405,7 @@
     </div>
 
     <div class="grp"><label>Options</label>
+      <label class="chk"><input type="checkbox" id="opt-room" checked> Pull back for big gestures</label>
       <label class="chk"><input type="checkbox" id="opt-vfx" checked> Cartoon effects</label>
       <label class="chk"><input type="checkbox" id="opt-fadeidle" checked> Fade out after reaction</label>
       <label class="chk"><input type="checkbox" id="opt-ondemand"> Render on demand</label>
@@ -607,9 +608,18 @@ const GAME_EVENTS = [
 // no hand gesture can ever be seen there. These moves pull the camera back for
 // their duration and it eases home afterwards — big face at rest, whole gesture
 // when it matters.
-const NEEDS_ROOM = new Set(['Middle finger', 'ROFL', 'Point', 'Celebrate', 'Clap',
-                            'Dance 1', 'Dance 2', 'Win', 'Shake head']);
+// Measured, with the pull-back disabled, as the share of frames where the hands
+// stay inside the portrait frame:
+//
+//   Laugh/Angry/Win/Lose 100%   ROFL 97%   Dance 1 95%   Clap 95%
+//   Celebrate 89%   Point 84%   Dance 2 78%   Shake head 60%
+//   Middle finger 57% — and its FINGERTIP, which is the entire gesture, 1%
+//
+// So only the middle finger genuinely cannot be read in portrait. Pulling back
+// for the others threw away the big face for no reason.
+const NEEDS_ROOM = new Set(['Middle finger']);
 let roomBlend = 0, roomTarget = 0;      // 0 = framing as set, 1 = pulled back
+let ROOM_ON = true;                    // pull back at all?
 
 const EFFECTS = {
   'Angry': { kind: 'steam', anchor: 'ears',  every: 95,  dur: 1400 },
@@ -897,7 +907,7 @@ function triggerAll(label) {
     av.faceTarget = { ...(FACES[label] ?? FACES['Idle']) };
     av.alphaTarget = 1;                       // pop in for the reaction
     runEffect(av, label);
-    if (NEEDS_ROOM.has(label)) roomTarget = 1;
+    if (ROOM_ON && NEEDS_ROOM.has(label)) roomTarget = 1;
     if (isIdle) return;
     const clipLen = av.actions[name]?.getClip().duration ?? REACTION_HOLD;
     // start fading home before the hold elapses, so it eases out rather than stopping
@@ -1312,6 +1322,7 @@ function fadeIdentityForSize() {
 }
 $('opt-hold').oninput = e => { REACTION_HOLD = +e.target.value; $('v-hold').textContent = REACTION_HOLD.toFixed(1) + 's'; };
 $('opt-fade').oninput = e => { FADE_HOME = +e.target.value; $('v-fade').textContent = FADE_HOME.toFixed(2) + 's'; };
+$('opt-room').onchange = e => { ROOM_ON = e.target.checked; if (!ROOM_ON) roomTarget = 0; invalidate(); };
 $('opt-vfx').onchange = e => {
   VFX_ON = e.target.checked;
   if (!VFX_ON) { avatars.forEach(a => clearInterval(a.fxTimer)); vfxLayer.innerHTML = ''; }

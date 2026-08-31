@@ -215,9 +215,18 @@ x=-0.97 against a half-frame of 0.93, so **the hands are outside it entirely**.
 The first middle finger looked broken for exactly this reason: correct pose,
 invisible hands.
 
-Moves in `NEEDS_ROOM` now ease the camera back to a wide shot for their
-duration and it eases home afterwards — big face at rest, whole gesture when it
-matters. Fingertip on-screen went from 1% of frames to 84%.
+**Only the middle finger needs this.** Measured with the pull-back disabled, as
+the share of frames where the hands stay inside the portrait frame:
+
+    Laugh/Angry/Win/Lose 100%   ROFL 97%   Dance 1 95%   Clap 95%
+    Celebrate 89%   Point 84%   Dance 2 78%   Shake head 60%
+    Middle finger 57% — and its FINGERTIP, the entire point, 1%
+
+An earlier version pulled back for nine of the eleven moves, which threw away
+the big face for no reason — the thing the portrait framing existed to give.
+`NEEDS_ROOM` is now just the middle finger: head stays 158-179px on every other
+reaction, and drops to 60px only for that one. There is a **Pull back for big
+gestures** toggle in the dev panel to turn it off entirely.
 
 Sizing that pull-back needed care: feet stay at `FOOT_LINE` (46.5% from the
 top), so only ~46% of the screen exists above them. Lerping to a 62%-tall
