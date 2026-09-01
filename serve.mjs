@@ -3,10 +3,12 @@
 // the whole point, desktop numbers tell us nothing about a mid-range Android.
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
-import { join, extname, normalize } from 'node:path';
+import { join, extname, normalize, dirname } from 'node:path';
 import { networkInterfaces } from 'node:os';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('.', import.meta.url).pathname;
+const __filename = fileURLToPath(import.meta.url);
+const ROOT = dirname(__filename);
 const PORT = Number(process.env.PORT ?? 8088);
 
 const TYPES = {

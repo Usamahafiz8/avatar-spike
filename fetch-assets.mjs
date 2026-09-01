@@ -9,8 +9,10 @@
 //   node fetch-assets.mjs
 import { mkdir, writeFile, stat } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('.', import.meta.url).pathname;
+const __filename = fileURLToPath(import.meta.url);
+const ROOT = dirname(__filename);
 const ANIM = 'https://cdn.jsdelivr.net/gh/readyplayerme/animation-library@master/feminine/glb';
 const RAW  = 'https://raw.githubusercontent.com/readyplayerme';
 

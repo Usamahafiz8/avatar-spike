@@ -1733,48 +1733,235 @@ $('setupBtn').onclick = openSheet;
 $('sheetClose').onclick = closeSheet;
 sheet.querySelector('.scrim').onclick = closeSheet;
 
-// Selfie: preview only. Generating a character from it needs a vendor account,
-// and a mock that pretends to work would be worse than an honest gap.
+// ---- Ready Player Me avatar generation ----
+// Embed Ready Player Me Creator in iframe modal (free tier, no login required).
+// Listen for v1.avatar.exported event via postMessage from RPM.
+// RPM avatars ship with standard Humanoid bones, compatible with our animation rig.
+const RPM_CREATOR_URLS = [
+  'https://readyplayer.me/avatar?frameApi'
+];
+const RPM_CACHE_KEY = 'sbj.rpm-avatar.v1';
+let _rpmIframe = null;
+let _rpmModal = null;
+let _rpmLoadTimeout = null;
+
+// Load cached RPM avatar if it exists
+let _lastAvatarUrl = null;
+try {
+  const cached = JSON.parse(localStorage.getItem(RPM_CACHE_KEY) || 'null');
+  if (cached?.url && Date.now() - cached.timestamp < 30 * 24 * 60 * 60 * 1000) {
+    _lastAvatarUrl = cached.url;
+  }
+} catch {}
+
+function closeRPMModal() {
+  if (_rpmLoadTimeout) clearTimeout(_rpmLoadTimeout);
+  if (_rpmModal?.parentElement) _rpmModal.remove();
+  _rpmModal = null;
+  _rpmIframe = null;
+}
+
+function tryLaunchRPM() {
+  return new Promise(resolve => {
+    closeRPMModal();
+
+    // Create modal container
+    _rpmModal = document.createElement('div');
+    _rpmModal.style.cssText = `
+      position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 100;
+      display: grid; place-items: center; padding: 20px;
+    `;
+
+    // Create loading text
+    const loader = document.createElement('div');
+    loader.style.cssText = `
+      color: #c2f53f; font-size: 14px; text-align: center;
+      padding: 20px; background: rgba(42,143,82,0.2); border-radius: 12px;
+    `;
+    loader.textContent = 'Loading Ready Player Me creator…';
+    _rpmModal.appendChild(loader);
+
+    // Close on scrim click (but pass through the resolve state)
+    _rpmModal.onclick = ev => {
+      if (ev.target === _rpmModal) {
+        closeRPMModal();
+        resolve(false);  // User cancelled
+      }
+    };
+
+    const url = RPM_CREATOR_URLS[0];
+    console.log(`[rpm] Attempting to load from: ${url}`);
+
+    _rpmIframe = document.createElement('iframe');
+    _rpmIframe.id = 'rpm-creator-iframe';
+    _rpmIframe.src = url;
+    _rpmIframe.style.cssText = `
+      width: 100%; height: 100%; max-width: 1200px; max-height: 800px;
+      border: none; border-radius: 12px;
+      opacity: 0; transition: opacity 0.3s ease;
+    `;
+
+    // Iframe permissions
+    _rpmIframe.allow = 'camera; microphone; clipboard-write';
+    _rpmIframe.sandbox.add('allow-scripts', 'allow-forms', 'allow-popups', 'allow-modals', 'allow-popups-to-escape-sandbox');
+
+    // Success: RPM loaded
+    _rpmIframe.onload = () => {
+      console.log('[rpm] Iframe loaded successfully');
+      if (_rpmLoadTimeout) clearTimeout(_rpmLoadTimeout);
+      if (loader.parentElement) loader.remove();
+      setTimeout(() => { _rpmIframe.style.opacity = '1'; }, 100);
+      resolve(true);  // RPM launched successfully
+    };
+
+    // Error: fallback to local
+    _rpmIframe.onerror = () => {
+      console.warn(`[rpm] Failed to load from ${url}`);
+      if (_rpmLoadTimeout) clearTimeout(_rpmLoadTimeout);
+      closeRPMModal();
+      resolve(false);  // Fall back to local
+    };
+
+    _rpmModal.appendChild(_rpmIframe);
+
+    // Timeout: fallback to local
+    _rpmLoadTimeout = setTimeout(() => {
+      console.warn(`[rpm] Timeout loading from ${url}`);
+      closeRPMModal();
+      resolve(false);  // Fall back to local
+    }, 10000);  // 10 second timeout
+
+    document.body.appendChild(_rpmModal);
+  });
+}
+
+async function loadAvatarFromUrl(glbUrl) {
+  if (!glbUrl) throw new Error('No GLB URL provided');
+
+  MODELS.custom = { url: glbUrl, rig: 'rpm', label: 'RPM Avatar', face: true };
+  delete cache[glbUrl];
+  const prev = currentModel;
+  currentModel = 'custom';
+
+  try {
+    await build();
+    const a = avatars[0];
+    const info = `${a.morphMeshes.length ? a.morphMeshes.length + ' face meshes' : '<b>no facial blendshapes</b>'}, ` +
+      `${(cache[glbUrl]?.tris ?? 0).toLocaleString()} triangles`;
+    return { success: true, info };
+  } catch (err) {
+    currentModel = prev;
+    await build();
+    throw err;
+  }
+}
+
+// Listen for Ready Player Me avatar export events via postMessage
+window.addEventListener('message', async ev => {
+  // Validate origin is from Ready Player Me
+  if (!ev.origin?.includes('readyplayer.me')) return;
+
+  const data = ev.data;
+
+  // RPM sends v1.avatar.exported event with avatar URL
+  if (data?.source !== 'readyplayerme' || data?.eventName !== 'v1.avatar.exported') return;
+
+  const glbUrl = data.avatarUrl;
+  if (!glbUrl) return;
+
+  console.log('[rpm] Avatar exported:', glbUrl);
+
+  const note = $('shotNote');
+  closeRPMModal();
+
+  try {
+    note.textContent = 'Loading your avatar\u2026';
+    const result = await loadAvatarFromUrl(glbUrl);
+
+    // Save to cache
+    try {
+      localStorage.setItem(RPM_CACHE_KEY, JSON.stringify({ url: glbUrl, timestamp: Date.now() }));
+    } catch {}
+
+    // Update UI with model info
+    note.innerHTML = `<b style="color:var(--good)">\u2713 Avatar created!</b> ` +
+      `${result.info}. <a href="#" id="resetAvatar" style="color:var(--lime)">Use default instead</a>`;
+    $('resetAvatar').onclick = ev => {
+      ev.preventDefault();
+      try { localStorage.removeItem(RPM_CACHE_KEY); } catch {}
+      currentModel = 'male';
+      build().then(() => {
+        renderEditor();
+        renderMyCharacter();
+        note.textContent = 'Reset to default avatar.';
+      });
+    };
+
+    renderEditor();
+    await renderMyCharacter();
+  } catch (err) {
+    console.error('[rpm] Failed to load avatar:', err);
+    note.innerHTML = `<b>Could not load avatar.</b> ${err.message} ` +
+      `Try picking a character below instead.`;
+  }
+});
+
+// Selfie: local texture extraction and avatar personalization (no external login)
 $('selfie').onchange = async e => {
   const f = e.target.files?.[0];
   if (!f) return;
+
   const img = $('shot');
   img.src = URL.createObjectURL(f);
   $('shotWrap').classList.add('on');
   const note = $('shotNote');
-  note.textContent = 'Reading your colours\u2026';
+
+  // Local texture extraction (no external network needed)
+  note.textContent = 'Analyzing your face for personalized textures\u2026';
   await new Promise(r => { img.onload = r; img.onerror = r; });
+
   try {
     const out = await analyseSelfie(img);
     if (out.error) {
-      note.innerHTML = `<b>No face found.</b> Try a clearer, front-facing photo \u2014 or pick a character below.`;
+      note.innerHTML = `<b>\u26a0 No face detected.</b> Try a clearer, front-facing photo \u2014 or pick a character below.`;
+      $('selfie').value = '';
       return;
     }
+
     charColours['Wolf3D_Skin'] = '#' + out.skin.getHexString();
     if (out.hair) charColours['Wolf3D_Hair'] = '#' + out.hair.getHexString();
     saveColours();
+
     avatars.forEach(applyPersonalisation);
     renderEditor();
     await renderMyCharacter();
+
     const hex = c => '#' + c.getHexString();
-    note.innerHTML = `Matched your colouring \u2014 ` +
-      `<span style="display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;background:${hex(out.skin)};border:1px solid #0006"></span> skin, ` +
-      `<span style="display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;background:${hex(out.hair)};border:1px solid #0006"></span> hair. ` +
-      `Nothing left your phone. <a href="#" id="resetTint" style="color:var(--lime)">Undo</a>`;
+    note.innerHTML = `<b style="color:var(--good)">\u2713 Your avatar is ready!</b> ` +
+      `<span style="display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;background:${hex(out.skin)};border:1px solid #0006"></span> ` +
+      `skin, ` +
+      `<span style="display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;background:${hex(out.hair)};border:1px solid #0006"></span> ` +
+      `hair. Personalized locally, no external services needed. ` +
+      `<a href="#" id="resetTint" style="color:var(--lime)">Try a different photo</a>`;
+
     $('resetTint').onclick = ev => {
       ev.preventDefault();
       charColours = {}; saveColours();
       avatars.forEach(applyPersonalisation);
       renderEditor(); renderMyCharacter();
-      note.textContent = 'Colouring reset.';
+      $('selfie').value = '';
+      note.textContent = 'Ready for a new photo.';
     };
   } catch (err) {
-    note.innerHTML = `<b>Could not read that photo.</b> ${err.message}`;
+    console.error('[selfie] Error:', err);
+    note.innerHTML = `<b>Could not analyze photo.</b> ${err.message} Try another photo or pick a character below.`;
   }
+
+  $('selfie').value = '';  // Clear file input
 };
 
 // Load a real avatar GLB from disk. This is the path that already works: point
-// it at an Avaturn export and it renders at the table with all 11 animations.
+// it at a Ready Player Me export and it renders at the table with all 11 animations.
 $('glbfile').onchange = async e => {
   const f = e.target.files?.[0];
   if (!f) return;
@@ -1834,6 +2021,22 @@ renderQuickbar();
 
 (async function start() {
   try {
+    // Try to load cached RPM avatar first (but don't break if it fails)
+    if (_lastAvatarUrl) {
+      console.log('[startup] Loading cached RPM avatar:', _lastAvatarUrl);
+      try {
+        await loadAvatarFromUrl(_lastAvatarUrl);
+        console.log('[startup] Cached avatar loaded successfully');
+      } catch (err) {
+        console.warn('[startup] Failed to load cached avatar, ignoring:', err.message);
+        // Clear bad cache and continue with default
+        try { localStorage.removeItem(RPM_CACHE_KEY); } catch {}
+        _lastAvatarUrl = null;
+        currentModel = 'male';
+      }
+    }
+
+    // Always load base scene (even if cached avatar failed)
     resize(); await build(); fadeIdentityForSize();
     $('loading').classList.add('done');
     renderEditor();
