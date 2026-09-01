@@ -398,22 +398,22 @@
     <div class="grp">
       <label>Framing</label>
       <div class="seg" id="seg-framing">
-        <button data-f="full" aria-pressed="false">Full body</button>
-        <button data-f="portrait" aria-pressed="true">Portrait</button>
+        <button data-f="full" aria-pressed="true">Full body</button>
+        <button data-f="portrait" aria-pressed="false">Portrait</button>
       </div>
     </div>
 
-    <div class="grp" id="grp-size" hidden>
-      <label>Character size <b id="v-size2">19%</b></label>
-      <input type="range" id="opt-size" min="0.14" max="0.55" step="0.01" value="0.19" style="width:100%">
+    <div class="grp" id="grp-size">
+      <label>Character size <b id="v-size2">26%</b></label>
+      <input type="range" id="opt-size" min="0.14" max="0.55" step="0.01" value="0.26" style="width:100%">
     </div>
 
     <div class="grp">
-      <label>Head size <b id="v-head">1.75x</b></label>
-      <input type="range" id="opt-head" min="1" max="3.2" step="0.05" value="1.75" style="width:100%">
+      <label>Head size <b id="v-head">1.00x</b></label>
+      <input type="range" id="opt-head" min="1" max="3.2" step="0.05" value="1" style="width:100%">
     </div>
 
-    <div class="grp" id="grp-face">
+    <div class="grp" id="grp-face" hidden>
       <label>Face size <b id="v-face">14%</b></label>
       <input type="range" id="opt-face" min="0.06" max="0.34" step="0.01" value="0.14" style="width:100%">
     </div>
@@ -707,13 +707,13 @@ scene.add(shadowPlane);
 // Character height as a fraction of the felt. 0.19 matches Miyagi's reference
 // screenshot, but the face is unreadable at that size, so it is now a live
 // slider — see the note on facial expressions in the README.
-let TARGET_FRACTION = 0.19;
+let TARGET_FRACTION = 0.26;   // a touch above the reference 19% so the face still reads
 
 // Framing. 'full' = the reference: whole body, feet on the deck. 'portrait'
 // anchors the HEAD instead, so the slider controls how big the FACE is rather
 // than how tall the body is — a full-body character has a head about 1/7.5 of
 // its height, so body size alone can never make the face readable.
-let FRAMING = 'portrait';   // face-forward by default; toggle to 'full' for the reference layout
+let FRAMING = 'full';       // Miyagi's reference composition; Portrait is a toggle
 let FACE_FRACTION = 0.14;      // head height as a fraction of the felt
 const HEAD_RATIO  = 7.5;       // body heights per head
 const HEAD_CENTRE = 0.93;      // head centre, as a fraction up from the feet
@@ -727,7 +727,7 @@ const HEAD_Y      = 0.26;      // where the head sits on screen, from the top
 // Animation clips carry scale tracks for every bone, so the mixer overwrites
 // this on each update; it has to be re-applied AFTER mixer.update() every frame
 // (see applyHeadScale in the render loop), not once at build time.
-let HEAD_SCALE = 1.75;
+let HEAD_SCALE = 1.0;         // natural proportions; the chibi inflation made it worse, not better
 const FOOT_LINE = 0.465;
 let targetWorldHeight = .72, viewH = 3.78, viewW = 2.2, onScreenPct = 19;
 
