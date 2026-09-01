@@ -37,7 +37,7 @@ console.log('full body:', JSON.stringify(await geom()), '  <- feet must sit on t
 console.log('buttons  :', await page.evaluate(() => [...document.querySelectorAll('#clip-buttons .act')].map(b=>b.textContent).join(', ')));
 
 // every reaction must fade home inside the hold
-for (const label of ['Dance 1','Dance 2','Laugh','Point','Celebrate','Angry','Shake head','Clap','Win','Lose']) {
+for (const label of ['Dance 1','Dance 2','Dance 3','Celebrate','Angry','Laugh','Middle finger']) {
   const r = await page.evaluate(async (label) => {
     const a = window.__spike.avatars[0], idle = 'F_Standing_Idle_001';
     const t0 = performance.now();

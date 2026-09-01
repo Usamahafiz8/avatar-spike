@@ -256,28 +256,46 @@
   #sheet.on { display: block; }
   #sheet .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.6); }
   #sheet .sheetcard {
-    position: absolute; left: 0; right: 0; bottom: 0; max-height: 88%; overflow-y: auto;
-    background: #0e1a12; border-top: 1px solid var(--line);
-    border-radius: 18px 18px 0 0; padding: 18px 16px calc(20px + env(safe-area-inset-bottom));
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    background: #0b1410; padding: 0;
   }
-  #sheet h3 { margin: 0 0 3px; font-size: 17px; font-weight: 800; }
-  #sheet .sub { color: var(--muted); font-size: 12px; margin-bottom: 15px; }
-  #sheet .step { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--lime); margin: 16px 0 7px; font-weight: 700; }
+  #sheetTop {
+    display: flex; align-items: center; justify-content: space-between; flex: 0 0 auto;
+    padding: calc(10px + env(safe-area-inset-top)) 16px 10px;
+    border-bottom: 1px solid rgba(255,255,255,.07);
+  }
+  #preview {
+    flex: 0 0 auto; height: 30vh; display: grid; place-items: center; overflow: hidden;
+    background: radial-gradient(ellipse 70% 60% at 50% 40%, #2a8f52, #0d4526);
+  }
+  #preview img { max-height: 100%; width: auto; display: block; }
+  .tabs { flex: 0 0 auto; display: flex; gap: 6px; padding: 10px 16px 0; }
+  .tabs button {
+    flex: 1; padding: 9px 0; border-radius: 10px; border: 1px solid rgba(255,255,255,.12);
+    background: rgba(255,255,255,.05); color: var(--muted); font: inherit; font-size: 12px;
+    font-weight: 800; letter-spacing: .05em; text-transform: uppercase; cursor: pointer;
+  }
+  .tabs button[aria-pressed="true"] { background: var(--lime); color: #10240a; border-color: var(--lime); }
+  .tab {
+    flex: 1 1 auto; overflow-y: auto; padding: 14px 16px calc(18px + env(safe-area-inset-bottom));
+  }
+  .tab[hidden] { display: none; }
+  #sheet h3 { margin: 0; font-size: 17px; font-weight: 800; }
   .bigbtn {
-    display: block; width: 100%; padding: 15px; border-radius: 13px; font: inherit; font-size: 14px;
+    display: block; width: 100%; padding: 13px; margin-top: 10px; border-radius: 13px; font: inherit; font-size: 14px;
     font-weight: 800; cursor: pointer; border: 1px solid var(--line);
     background: var(--lime); color: #10240a; text-align: center;
   }
   .bigbtn.ghost { background: rgba(255,255,255,.05); color: var(--text); }
   .note { font-size: 11.5px; line-height: 1.45; color: var(--muted); margin-top: 9px; }
   .note b { color: var(--warn); }
-  #shotWrap { display: none; margin-top: 12px; text-align: center; }
+  #shotWrap { display: none; margin-top: 10px; text-align: center; }
   #shotWrap.on { display: block; }
   .compare { display: flex; align-items: center; justify-content: center; gap: 10px; }
   .compare figure { margin: 0; text-align: center; }
   .compare figcaption { font-size: 9px; letter-spacing: .06em; text-transform: uppercase;
                         color: var(--muted); margin-top: 4px; font-weight: 700; }
-  .compare img { width: 108px; border-radius: 12px; border: 2px solid var(--line); display: block; }
+  .compare img { width: 92px; border-radius: 12px; border: 2px solid var(--line); display: block; }
   .compare #myChar { background: radial-gradient(ellipse at 50% 35%, #2a8f52, #0d4526); }
   .arrow { color: var(--lime); font-size: 20px; }
 
@@ -295,8 +313,8 @@
     background: rgba(0,0,0,.55); border-radius: 5px; padding: 2px 5px;
   }
   #sheetClose {
-    width: 100%; margin-top: 16px; padding: 12px; border-radius: 12px; cursor: pointer;
-    background: transparent; color: var(--muted); border: 1px solid rgba(255,255,255,.12); font: inherit;
+    padding: 8px 16px; border-radius: 999px; cursor: pointer; font: inherit; font-weight: 800;
+    background: var(--lime); color: #10240a; border: none; font-size: 12px;
   }
   #loading { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(4,16,10,.94); z-index: 60; color: var(--lime); }
   #loading.done { display: none; }
@@ -451,49 +469,49 @@
 <div id="sheet">
   <div class="scrim"></div>
   <div class="sheetcard">
-    <h3>Your character</h3>
-    <div class="sub">One clear, front-facing photo is all it takes.</div>
+    <header id="sheetTop">
+      <h3>Your character</h3>
+      <button id="sheetClose" aria-label="Done">Done</button>
+    </header>
 
-    <div class="step">1 &middot; Upload a selfie</div>
-    <label class="bigbtn" for="selfie">📷 Choose a photo</label>
-    <input type="file" id="selfie" accept="image/*" hidden>
-    <div id="shotWrap">
-      <div class="compare">
-        <figure><img id="shot" alt="your selfie"><figcaption>your photo</figcaption></figure>
-        <div class="arrow">&rarr;</div>
-        <figure hidden><img id="myChar" alt="your character"><figcaption>your character</figcaption></figure>
+    <!-- live preview, always visible; the tabs change beneath it -->
+    <div id="preview"><img id="myChar" alt="your character"></div>
+
+    <nav class="tabs" id="tabs">
+      <button data-t="look"   aria-pressed="true">Look</button>
+      <button data-t="colour" aria-pressed="false">Colours</button>
+      <button data-t="moves"  aria-pressed="false">Moves</button>
+    </nav>
+
+    <section class="tab" data-t="look">
+      <div class="picks" id="picks">
+        <div class="pick" data-m="male"   aria-pressed="true"><b class="who">M</b><small>male</small></div>
+        <div class="pick" data-m="female" aria-pressed="false"><b class="who">F</b><small>female</small></div>
       </div>
-      <div class="note" id="shotNote"></div>
-    </div>
-    <div class="note" id="selfieNote">
-      Read <b>on your phone</b> and never uploaded. It matches your skin tone and
-      hair colour onto the character. It does not rebuild your face &mdash; in game
-      the head renders about 15px, so colouring is what actually reads as you.
-    </div>
+      <label class="bigbtn" for="selfie">&#128247; Match my photo</label>
+      <input type="file" id="selfie" accept="image/*" hidden>
+      <div id="shotWrap">
+        <div class="compare">
+          <figure><img id="shot" alt="your selfie"><figcaption>your photo</figcaption></figure>
+        </div>
+        <div class="note" id="shotNote"></div>
+      </div>
+      <div class="note">Read on your phone, never uploaded. Matches your skin and hair
+        colour &mdash; it does not rebuild your face.</div>
+      <label class="bigbtn ghost" for="glbfile">&#11014; Load a .glb avatar</label>
+      <input type="file" id="glbfile" accept=".glb,model/gltf-binary" hidden>
+      <div class="note" id="glbNote"></div>
+    </section>
 
-    <div class="step">2 &middot; Your character</div>
-    <div class="picks" id="picks">
-      <div class="pick" data-m="male"   aria-pressed="true"><b class="who">M</b><small>male</small></div>
-      <div class="pick" data-m="female" aria-pressed="false"><b class="who">F</b><small>female</small></div>
-    </div>
+    <section class="tab" data-t="colour" hidden>
+      <div id="editor"></div>
+      <div class="note" id="editorNote"></div>
+    </section>
 
-    <div class="step">3 &middot; Colours</div>
-    <div id="editor"></div>
-    <div class="note" id="editorNote"></div>
-
-    <div class="step">4 &middot; Your moves &mdash; pick up to 4</div>
-    <div class="moves" id="moves"></div>
-    <div class="note" id="movesNote"></div>
-
-    <div class="step">5 &middot; Already have an avatar file?</div>
-    <label class="bigbtn ghost" for="glbfile">⬆ Load a .glb avatar</label>
-    <input type="file" id="glbfile" accept=".glb,model/gltf-binary" hidden>
-    <div class="note" id="glbNote">
-      This one works right now. Export a GLB from Avaturn (or anywhere) and load
-      it here to see it at the table immediately, with all 11 animations.
-    </div>
-
-    <button id="sheetClose">Done</button>
+    <section class="tab" data-t="moves" hidden>
+      <div class="moves" id="moves"></div>
+      <div class="note" id="movesNote"></div>
+    </section>
   </div>
 </div>
 
@@ -576,27 +594,36 @@ const COLOUR_KEY = 'sbj.colours.v1';
 // Celebrate -> Angry -> Shake head -> Clap -> Win -> Lose, plus the two moves
 // no library has. Assignments were made by rendering all 28 clips to a contact
 // sheet and looking at them — see sheet.html / contact-sheet.png.
+// Only reactions that measurably READ at table scale. Motion is the total path
+// five joints travel over the reaction; below ~3 the move is a near-static pose
+// and simply does not register on a character this size:
+//
+//   Dance 2 9.3   ROFL 7.6   Dance 1 6.0   Dance 3 4.9   Celebrate 4.7
+//   Middle finger 3.5
+//   --- cut ---
+//   Celebrate(old) 3.0  Clap 2.2  Angry 1.5  Win 1.3  Lose 1.3
+//   Shake head 1.2  Point 0.9  Laugh 0.7
+//
+// RPM's whole "Standing Expressions" set measures 0.8-1.4 — they are subtle
+// conversational gestures meant for a close-up, not reactions read across a
+// table. Every one was cut. Angry survives only because its steam effect does
+// the work its body does not.
 const CLIP_FILES = [
   { label: 'Idle',       file: 'F_Standing_Idle_001',        icon: '\u{1F610}' },
   { label: 'Dance 1',    file: 'F_Dances_001',               icon: '\u{1F57A}' },
   { label: 'Dance 2',    file: 'F_Dances_004',               icon: '\u{1F483}' },
-  { label: 'Laugh',      file: 'F_Talking_Variations_001',   icon: '\u{1F602}' },
-  { label: 'Point',      file: 'M_Standing_Expressions_017', icon: '\u{1F449}' },
-  { label: 'Celebrate',  file: 'M_Standing_Expressions_010', icon: '\u{1F64C}' },
+  { label: 'Dance 3',    file: 'F_Dances_006',               icon: '\u{1F3B6}' },
+  { label: 'Celebrate',  file: 'F_Dances_005',               icon: '\u{1F64C}' },
   { label: 'Angry',      file: 'M_Standing_Expressions_012', icon: '\u{1F620}' },
-  { label: 'Shake head', file: 'M_Standing_Expressions_005', icon: '\u{1F645}' },
-  { label: 'Clap',       file: 'M_Standing_Expressions_015', icon: '\u{1F44F}' },
-  { label: 'Win',        file: 'M_Standing_Expressions_016', icon: '\u{1F3C6}' },
-  { label: 'Lose',       file: 'M_Standing_Expressions_007', icon: '\u{1F614}' },
+  { label: 'Laugh',         authored: true, icon: '\u{1F923}' },
   { label: 'Middle finger', authored: true, icon: '\u{1F595}' },
-  { label: 'ROFL',          authored: true, icon: '\u{1F923}' },
 ];
 
 // The player's equipped taunts. Limits PLAYER-SENT reactions only — game events
 // still fire their own animation regardless of what is equipped.
 const LOADOUT_MAX = 4;
 const LOADOUT_KEY = 'sbj.loadout.v1';
-let LOADOUT = ['Dance 1', 'Laugh', 'Point', 'Celebrate'];
+let LOADOUT = ['Dance 1', 'Dance 2', 'Laugh', 'Celebrate'];
 try {
   const saved = JSON.parse(localStorage.getItem(LOADOUT_KEY) || 'null');
   if (Array.isArray(saved) && saved.length) LOADOUT = saved.slice(0, LOADOUT_MAX);
@@ -608,15 +635,12 @@ const saveLoadout = () => { try { localStorage.setItem(LOADOUT_KEY, JSON.stringi
 // integration will bind to — the realtime layer already emits round:result and
 // action:committed, so this is the shape, not a guess.
 const GAME_EVENTS = [
-  { event: 'Win a hand',      reaction: 'Celebrate' },
-  { event: 'Play a BlackJack',reaction: 'Win'       },
-  { event: 'Bring back',      reaction: 'Clap'      },
-  { event: 'Win the game',    reaction: 'Dance 1'   },
-  { event: 'Lose a hand',     reaction: 'Lose'      },
-  { event: 'Taunt',           reaction: 'Point'     },
-  { event: 'Opponent misses', reaction: 'Laugh'     },
-  { event: 'Refuse / no',     reaction: 'Shake head'},
-  { event: 'Annoyed',         reaction: 'Angry'     },
+  { event: 'Win a hand',       reaction: 'Celebrate'     },
+  { event: 'Play a BlackJack', reaction: 'Dance 2'       },
+  { event: 'Win the game',     reaction: 'Dance 1'       },
+  { event: 'Opponent misses',  reaction: 'Laugh'         },
+  { event: 'Annoyed',          reaction: 'Angry'         },
+  { event: 'Taunt',            reaction: 'Middle finger' },
 ];
 
 // Which cartoon effect rides along with which reaction.
@@ -640,11 +664,9 @@ let roomBlend = 0, roomTarget = 0;      // 0 = framing as set, 1 = pulled back
 let ROOM_ON = true;                    // pull back at all?
 
 const EFFECTS = {
-  'Angry': { kind: 'steam', anchor: 'ears',  every: 95,  dur: 1400 },
-  'Win':   { kind: 'star',  anchor: 'crown', every: 110, dur: 1300 },
-  'Lose':  { kind: 'drop',  anchor: 'brow',  every: 420, dur: 1400 },
-  'Laugh': { kind: 'drop',  anchor: 'brow',  every: 520, dur: 1200 },
-  'ROFL':          { kind: 'drop',  anchor: 'brow', every: 300, dur: 1100 },
+  'Angry':     { kind: 'steam', anchor: 'ears',  every: 95,  dur: 1400 },
+  'Celebrate': { kind: 'star',  anchor: 'crown', every: 110, dur: 1300 },
+  'Laugh':     { kind: 'drop',  anchor: 'brow',  every: 300, dur: 1100 },
 };
 
 // Facial expression per reaction. The avatar exposes mouthSmile, mouthOpen and
@@ -652,18 +674,13 @@ const EFFECTS = {
 // body language only. The face eases toward these and back; blinking runs on top.
 const FACES = {
   'Idle':          { smile: .15, open: 0,   squint: 0   },
-  'Dance 1':       { smile: .55, open: .10, squint: 0   },
-  'Dance 2':       { smile: .60, open: .12, squint: 0   },
-  'Laugh':         { smile: .95, open: .45, squint: .25 },
-  'Point':         { smile: .30, open: .05, squint: 0   },
+  'Dance 1':       { smile: .60, open: .12, squint: 0   },
+  'Dance 2':       { smile: .65, open: .15, squint: 0   },
+  'Dance 3':       { smile: .60, open: .12, squint: 0   },
   'Celebrate':     { smile: .90, open: .40, squint: .10 },
   'Angry':         { smile: 0,   open: .15, squint: .45 },
-  'Shake head':    { smile: .05, open: 0,   squint: .10 },
-  'Clap':          { smile: .60, open: .10, squint: 0   },
-  'Win':           { smile: 1,   open: .35, squint: .15 },
-  'Lose':          { smile: 0,   open: .08, squint: .50 },
+  'Laugh':         { smile: 1,   open: .55, squint: .35 },
   'Middle finger': { smile: 0,   open: .10, squint: .40 },
-  'ROFL':          { smile: 1,   open: .55, squint: .35 },
 };
 
 const CLIP_MAP = {
@@ -1111,7 +1128,7 @@ const AUTHORED = {
   // So it plays upward instead: head thrown back, body folding and rocking,
   // knees snapping up alternately, arms flailing. Same "cracking up" energy,
   // entirely above the deck line.
-  'ROFL': () => authorClip('ROFL', 2.0, [
+  'Laugh': () => authorClip('Laugh', 2.0, [
     { t: 0.00, pose: {} },
     { t: 0.22, pose: { Spine: [38 * R, 0, 0], Spine1: [28 * R, 0, 0], Head: [26 * R, 0, 0],
                        LeftArm: [0, 0, 38 * R], RightArm: [0, 0, -38 * R] } },          // fold forward
@@ -1517,7 +1534,7 @@ async function renderThumbs() {
 // This renders the result beside the photo so the match is visible.
 async function renderMyCharacter() {
   const host = $('myChar');
-  const W = 200, H = 260;
+  const W = 340, H = 420;
   const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
   r.setPixelRatio(1); r.setSize(W, H, false);
   r.outputColorSpace = THREE.SRGBColorSpace;
@@ -1533,13 +1550,21 @@ async function renderMyCharacter() {
       ? o.material.map(m => m.clone()) : o.material.clone(); });
     tintRoot(root);                                   // the photo's colouring
     const visH = 2 * 5 * Math.tan(THREE.MathUtils.degToRad(15));
-    const scale = (visH * 3.4) / base.height;
+    // head and torso, not a face crop — the tiles use a tighter frame
+    const scale = (visH * 2.1) / base.height;
+    const charH = base.height * scale;
     root.scale.setScalar(scale);
-    root.position.y = -base.minY * scale - HEAD_CENTRE * (base.height * scale);
+    root.position.y = -base.minY * scale - charH * 0.80;
     sc.add(root);
+    // Pose it. The bind pose is a T-pose with the arms straight out, which is
+    // not what anyone wants to look at; one frame of idle gives a natural stand.
+    try {
+      const clips = await loadClipLibrary();
+      const idle = clips.find(c => c.name === rigOf(currentModel).idle);
+      if (idle) { const mx = new THREE.AnimationMixer(root); mx.clipAction(idle).play(); mx.update(0.8); }
+    } catch {}
     r.render(sc, cam);
     host.src = r.domElement.toDataURL('image/png');
-    host.parentElement.hidden = false;
   } catch {} finally { r.dispose(); }
 }
 
@@ -1727,7 +1752,18 @@ function renderEditor() {
 
 // ---- avatar setup sheet ----
 const sheet = $('sheet');
-const openSheet  = () => { sheet.classList.add('on'); renderThumbs(); };
+const openSheet  = () => {
+  sheet.classList.add('on');
+  renderThumbs();
+  renderEditor();
+  renderMyCharacter();          // the preview is the point of the sheet
+};
+
+$('tabs').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  for (const t of $('tabs').children) t.setAttribute('aria-pressed', String(t === b));
+  for (const sec of document.querySelectorAll('#sheet .tab')) sec.hidden = sec.dataset.t !== b.dataset.t;
+};
 const closeSheet = () => sheet.classList.remove('on');
 $('setupBtn').onclick = openSheet;
 $('sheetClose').onclick = closeSheet;

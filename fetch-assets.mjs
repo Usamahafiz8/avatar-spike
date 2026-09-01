@@ -30,21 +30,14 @@ const AVATARS = [
 ];
 
 // animation clips -----------------------------------------------------------
-// The 11 wired into CLIP_FILES, plus the rest of the expression set so the
-// contact sheet (sheet.html) has alternatives to choose from.
+// Only what is actually used. RPM's "Standing Expressions" set was dropped
+// wholesale: measured across five joints, every one of them moves 0.8-1.4
+// against 4.7-9.3 for the dances, so they read as near-static poses on a
+// character this size.
 const CLIPS = [
-  ['idle', ['F_Standing_Idle_001']],
+  ['idle',  ['F_Standing_Idle_001']],
   ['dance', ['F_Dances_001', 'F_Dances_004', 'F_Dances_005', 'F_Dances_006']],
-  ['expression', [
-    'F_Talking_Variations_001', 'F_Talking_Variations_002', 'F_Talking_Variations_003',
-    'F_Talking_Variations_004', 'F_Talking_Variations_005', 'F_Talking_Variations_006',
-    'M_Standing_Expressions_001', 'M_Standing_Expressions_002', 'M_Standing_Expressions_004',
-    'M_Standing_Expressions_005', 'M_Standing_Expressions_006', 'M_Standing_Expressions_007',
-    'M_Standing_Expressions_008', 'M_Standing_Expressions_009', 'M_Standing_Expressions_010',
-    'M_Standing_Expressions_011', 'M_Standing_Expressions_012', 'M_Standing_Expressions_013',
-    'M_Standing_Expressions_014', 'M_Standing_Expressions_015', 'M_Standing_Expressions_016',
-    'M_Standing_Expressions_017', 'M_Standing_Expressions_018',
-  ]],
+  ['expression', ['M_Standing_Expressions_012']],   // Angry — carried by its steam effect
 ];
 
 const exists = async p => { try { await stat(p); return true; } catch { return false; } };

@@ -263,7 +263,33 @@ This costs nothing per user: clips are shared files, so a loadout is just a
 list of names on the profile. It is also the natural shape for a premium
 unlock — more slots, or moves that have to be earned.
 
+## Reactions — only what measurably reads
+
+Seven reactions, chosen by measurement rather than taste. "Motion" is the total
+path five joints travel over one reaction; below about 3 the move is a
+near-static pose and does not register on a character at table scale.
+
+    KEPT                     CUT
+    Dance 2       9.3        Clap        2.2
+    Laugh         7.6        Angry*      1.5
+    Dance 1       6.0        Win         1.3
+    Dance 3       4.9        Lose        1.3
+    Celebrate     4.7        Shake head  1.2
+    Middle finger 3.5        Point       0.9
+                             Laugh(old)  0.7
+
+**RPM's entire "Standing Expressions" library was dropped.** Every clip in it
+measures 0.8-1.4 — they are subtle conversational gestures built for a close-up,
+not reactions to be read across a table. The dances and the two hand-authored
+moves are the only things that carry.
+
+*Angry survives on 1.5 because its steam effect does the work its body does not.
+
+Cut clips are also removed from `fetch-assets.mjs`, so a clean setup downloads
+six clips rather than twenty-eight.
+
 ## Character editor
+
 
 Two bodies and per-part colour, in the setup sheet.
 
