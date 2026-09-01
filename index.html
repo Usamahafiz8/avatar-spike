@@ -262,7 +262,14 @@
   .note b { color: var(--warn); }
   #shotWrap { display: none; margin-top: 12px; text-align: center; }
   #shotWrap.on { display: block; }
-  #shot { max-width: 148px; border-radius: 12px; border: 2px solid var(--line); }
+  .compare { display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .compare figure { margin: 0; text-align: center; }
+  .compare figcaption { font-size: 9px; letter-spacing: .06em; text-transform: uppercase;
+                        color: var(--muted); margin-top: 4px; font-weight: 700; }
+  .compare img { width: 108px; border-radius: 12px; border: 2px solid var(--line); display: block; }
+  .compare #myChar { background: radial-gradient(ellipse at 50% 35%, #2a8f52, #0d4526); }
+  .arrow { color: var(--lime); font-size: 20px; }
+
   .picks { display: flex; gap: 9px; margin-top: 4px; }
   .pick {
     flex: 1; aspect-ratio: 3/4; border-radius: 12px; cursor: pointer;
@@ -440,7 +447,14 @@
     <div class="step">1 &middot; Upload a selfie</div>
     <label class="bigbtn" for="selfie">📷 Choose a photo</label>
     <input type="file" id="selfie" accept="image/*" hidden>
-    <div id="shotWrap"><img id="shot" alt="your selfie"><div class="note" id="shotNote"></div></div>
+    <div id="shotWrap">
+      <div class="compare">
+        <figure><img id="shot" alt="your selfie"><figcaption>your photo</figcaption></figure>
+        <div class="arrow">&rarr;</div>
+        <figure hidden><img id="myChar" alt="your character"><figcaption>your character</figcaption></figure>
+      </div>
+      <div class="note" id="shotNote"></div>
+    </div>
     <div class="note" id="selfieNote">
       Read <b>on your phone</b> and never uploaded. It matches your skin tone and
       hair colour onto the character. It does not rebuild your face &mdash; in game
@@ -1476,6 +1490,38 @@ async function renderThumbs() {
   r.dispose();
 }
 
+// ---- "your character" preview -------------------------------------------
+// Without this the selfie step has no feedback loop: you pick a photo, get two
+// colour swatches, and the character is behind the sheet AND faded out at rest.
+// This renders the result beside the photo so the match is visible.
+async function renderMyCharacter() {
+  const host = $('myChar');
+  const W = 200, H = 260;
+  const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+  r.setPixelRatio(1); r.setSize(W, H, false);
+  r.outputColorSpace = THREE.SRGBColorSpace;
+  const sc = new THREE.Scene();
+  sc.add(new THREE.HemisphereLight(0xffffff, 0x2f6b45, 2.2));
+  const k = new THREE.DirectionalLight(0xffffff, 1.5); k.position.set(1.5, 3, 4); sc.add(k);
+  const cam = new THREE.PerspectiveCamera(30, W / H, .1, 50);
+  cam.position.set(0, 0, 5);
+  try {
+    const base = await loadModel(currentModel);
+    const root = cloneSkinned(base.scene);
+    root.traverse(o => { if (o.isMesh) o.material = Array.isArray(o.material)
+      ? o.material.map(m => m.clone()) : o.material.clone(); });
+    tintRoot(root);                                   // the photo's colouring
+    const visH = 2 * 5 * Math.tan(THREE.MathUtils.degToRad(15));
+    const scale = (visH * 3.4) / base.height;
+    root.scale.setScalar(scale);
+    root.position.y = -base.minY * scale - HEAD_CENTRE * (base.height * scale);
+    sc.add(root);
+    r.render(sc, cam);
+    host.src = r.domElement.toDataURL('image/png');
+    host.parentElement.hidden = false;
+  } catch {} finally { r.dispose(); }
+}
+
 // ---- selfie -> personalisation ------------------------------------------
 // No vendor account, no character generation. We read the SKIN and HAIR colour
 // out of the photo and tint the avatar's materials to match.
@@ -1569,6 +1615,12 @@ const SKIN_MATS = ['Wolf3D_Skin', 'Wolf3D_Body'];
 const HAIR_MATS = ['Wolf3D_Hair'];
 let personalisation = null;          // { skin, hair } or null
 
+function tintRoot(root) {
+  const meshes = [];
+  root.traverse(o => { if (o.isMesh) meshes.push(o); });
+  applyPersonalisation({ meshes });
+}
+
 function applyPersonalisation(av) {
   if (!av) return;
   for (const m of av.meshes) {
@@ -1616,6 +1668,7 @@ $('selfie').onchange = async e => {
     }
     personalisation = out;
     avatars.forEach(applyPersonalisation);
+    await renderMyCharacter();
     const hex = c => '#' + c.getHexString();
     note.innerHTML = `Matched your colouring \u2014 ` +
       `<span style="display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;background:${hex(out.skin)};border:1px solid #0006"></span> skin, ` +
@@ -1625,6 +1678,7 @@ $('selfie').onchange = async e => {
       ev.preventDefault();
       personalisation = null;
       avatars.forEach(applyPersonalisation);
+      renderMyCharacter();
       note.textContent = 'Colouring reset.';
     };
   } catch (err) {

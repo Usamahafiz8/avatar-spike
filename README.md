@@ -279,6 +279,12 @@ physically invisible at that size — what reads as "that's me" is colouring. So
 this captures most of the perceived personalisation for none of the vendor
 cost, and it still applies on top of a real Avaturn avatar later.
 
+The result is shown **beside the photo** in the sheet. Without that the step has
+no feedback loop at all: you pick a photo, get two colour swatches, and the
+character is behind the sheet *and* faded out at rest — so nothing visibly
+happens. The preview renders the current avatar with the photo's colouring
+applied, on the same throwaway-renderer trick as the picker tiles.
+
 Details that matter:
 
 - **Median, not mean.** A highlight or a stray hair across the cheek drags an
