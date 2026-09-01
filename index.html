@@ -223,19 +223,15 @@
   #quickbar button:active { background: rgba(194,245,63,.3); transform: scale(.92); }
 
   /* ===== colour editor ===== */
-  #editor { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; }
-  .swatch {
-    display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 11px;
-    background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.10);
-  }
+  #editor { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .swatch { display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; }
   .swatch input[type=color] {
-    -webkit-appearance: none; appearance: none; width: 30px; height: 30px; padding: 0;
-    border: none; border-radius: 8px; background: none; cursor: pointer; flex: 0 0 auto;
+    -webkit-appearance: none; appearance: none; width: 46px; height: 46px; padding: 0;
+    border: none; border-radius: 50%; background: none; cursor: pointer;
   }
   .swatch input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
-  .swatch input[type=color]::-webkit-color-swatch { border: 2px solid rgba(255,255,255,.25); border-radius: 8px; }
-  .swatch span { font-size: 11px; font-weight: 700; letter-spacing: .03em; }
-  .swatch.off { opacity: .35; pointer-events: none; }
+  .swatch input[type=color]::-webkit-color-swatch { border: 2px solid rgba(255,255,255,.3); border-radius: 50%; }
+  .swatch span { font-size: 9.5px; font-weight: 700; letter-spacing: .02em; color: var(--muted); }
 
   /* ===== loadout picker ===== */
   .moves { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
@@ -285,10 +281,9 @@
   .compare #myChar { background: radial-gradient(ellipse at 50% 35%, #2a8f52, #0d4526); }
   .arrow { color: var(--lime); font-size: 20px; }
 
-  .picks { display: flex; gap: 9px; margin-top: 4px; }
-  .picks .pick { aspect-ratio: 4/5; }
+  .picks { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 4px; }
   .pick {
-    flex: 1; aspect-ratio: 3/4; border-radius: 12px; cursor: pointer;
+    aspect-ratio: 1/1; border-radius: 12px; cursor: pointer;
     background: radial-gradient(ellipse at 50% 35%, #2a8f52, #0d4526);
     border: 2px solid transparent; display: grid; place-items: end center; padding-bottom: 7px;
     font-weight: 800; font-size: 12px; color: #fff;
@@ -476,27 +471,21 @@
       the head renders about 15px, so colouring is what actually reads as you.
     </div>
 
-    <div class="step">2 &middot; Body</div>
-    <div class="seg" id="seg-body">
-      <button data-m="male"   aria-pressed="true">Male</button>
-      <button data-m="female" aria-pressed="false">Female</button>
+    <div class="step">2 &middot; Your character</div>
+    <div class="picks" id="picks">
+      <div class="pick" data-m="male"   aria-pressed="true"><b class="who">M</b><small>male</small></div>
+      <div class="pick" data-m="female" aria-pressed="false"><b class="who">F</b><small>female</small></div>
     </div>
 
     <div class="step">3 &middot; Colours</div>
     <div id="editor"></div>
     <div class="note" id="editorNote"></div>
 
-    <div class="step">4 &middot; Or pick a character</div>
-    <div class="picks" id="picks">
-      <div class="pick" data-m="male"   aria-pressed="true"><b class="who">M</b><small>male</small></div>
-      <div class="pick" data-m="female" aria-pressed="false"><b class="who">F</b><small>female</small></div>
-    </div>
-
-    <div class="step">5 &middot; Your moves &mdash; pick up to 4</div>
+    <div class="step">4 &middot; Your moves &mdash; pick up to 4</div>
     <div class="moves" id="moves"></div>
     <div class="note" id="movesNote"></div>
 
-    <div class="step">6 &middot; Already have an avatar file?</div>
+    <div class="step">5 &middot; Already have an avatar file?</div>
     <label class="bigbtn ghost" for="glbfile">⬆ Load a .glb avatar</label>
     <input type="file" id="glbfile" accept=".glb,model/gltf-binary" hidden>
     <div class="note" id="glbNote">
@@ -1431,7 +1420,6 @@ $('seg-avatar').onclick = async e => {
   currentModel = b.dataset.m;
   setPressed('seg-avatar', 'm', currentModel);
   for (const c of $('picks').children) c.setAttribute('aria-pressed', String(c.dataset.m === currentModel));
-  setPressed('seg-body', 'm', currentModel);
   renderEditor();
   $('loading').classList.remove('done');
   await build();
@@ -1737,16 +1725,6 @@ function renderEditor() {
       'separates skin, hair, beard, eyes and all three clothing pieces.';
 }
 
-$('seg-body').onclick = async e => {
-  const btn = e.target.closest('button'); if (!btn) return;
-  currentModel = btn.dataset.m;
-  setPressed('seg-body', 'm', currentModel);
-  $('loading').classList.remove('done');
-  await build();
-  $('loading').classList.add('done');
-  renderEditor(); renderMyCharacter();
-};
-
 // ---- avatar setup sheet ----
 const sheet = $('sheet');
 const openSheet  = () => { sheet.classList.add('on'); renderThumbs(); };
@@ -1826,7 +1804,6 @@ $('picks').onclick = async e => {
   for (const c of $('picks').children) c.setAttribute('aria-pressed', String(c === p));
   currentModel = p.dataset.m;
   setPressed('seg-avatar', 'm', currentModel);
-  setPressed('seg-body', 'm', currentModel);
   $('loading').classList.remove('done');
   await build();
   $('loading').classList.add('done');
