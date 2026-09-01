@@ -222,6 +222,21 @@
   }
   #quickbar button:active { background: rgba(194,245,63,.3); transform: scale(.92); }
 
+  /* ===== colour editor ===== */
+  #editor { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; }
+  .swatch {
+    display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 11px;
+    background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.10);
+  }
+  .swatch input[type=color] {
+    -webkit-appearance: none; appearance: none; width: 30px; height: 30px; padding: 0;
+    border: none; border-radius: 8px; background: none; cursor: pointer; flex: 0 0 auto;
+  }
+  .swatch input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
+  .swatch input[type=color]::-webkit-color-swatch { border: 2px solid rgba(255,255,255,.25); border-radius: 8px; }
+  .swatch span { font-size: 11px; font-weight: 700; letter-spacing: .03em; }
+  .swatch.off { opacity: .35; pointer-events: none; }
+
   /* ===== loadout picker ===== */
   .moves { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
   .move {
@@ -271,6 +286,7 @@
   .arrow { color: var(--lime); font-size: 20px; }
 
   .picks { display: flex; gap: 9px; margin-top: 4px; }
+  .picks .pick { aspect-ratio: 4/5; }
   .pick {
     flex: 1; aspect-ratio: 3/4; border-radius: 12px; cursor: pointer;
     background: radial-gradient(ellipse at 50% 35%, #2a8f52, #0d4526);
@@ -367,9 +383,8 @@
     <div class="grp">
       <label>Avatar (fallback picker)</label>
       <div class="seg" id="seg-avatar">
-        <button data-m="default" aria-pressed="true">A</button>
-        <button data-m="premade1" aria-pressed="false">B</button>
-        <button data-m="premade2" aria-pressed="false">C</button>
+        <button data-m="male" aria-pressed="true">Male</button>
+        <button data-m="female" aria-pressed="false">Female</button>
       </div>
     </div>
 
@@ -461,18 +476,27 @@
       the head renders about 15px, so colouring is what actually reads as you.
     </div>
 
-    <div class="step">2 &middot; Or pick a character</div>
-    <div class="picks" id="picks">
-      <div class="pick" data-m="default"  aria-pressed="true"><b class="who">A</b><small>with face</small></div>
-      <div class="pick" data-m="premade1" aria-pressed="false"><b class="who">B</b><small>body only</small></div>
-      <div class="pick" data-m="premade2" aria-pressed="false"><b class="who">C</b><small>body only</small></div>
+    <div class="step">2 &middot; Body</div>
+    <div class="seg" id="seg-body">
+      <button data-m="male"   aria-pressed="true">Male</button>
+      <button data-m="female" aria-pressed="false">Female</button>
     </div>
 
-    <div class="step">3 &middot; Your moves &mdash; pick up to 4</div>
+    <div class="step">3 &middot; Colours</div>
+    <div id="editor"></div>
+    <div class="note" id="editorNote"></div>
+
+    <div class="step">4 &middot; Or pick a character</div>
+    <div class="picks" id="picks">
+      <div class="pick" data-m="male"   aria-pressed="true"><b class="who">M</b><small>male</small></div>
+      <div class="pick" data-m="female" aria-pressed="false"><b class="who">F</b><small>female</small></div>
+    </div>
+
+    <div class="step">5 &middot; Your moves &mdash; pick up to 4</div>
     <div class="moves" id="moves"></div>
     <div class="note" id="movesNote"></div>
 
-    <div class="step">4 &middot; Already have an avatar file?</div>
+    <div class="step">6 &middot; Already have an avatar file?</div>
     <label class="bigbtn ghost" for="glbfile">⬆ Load a .glb avatar</label>
     <input type="file" id="glbfile" accept=".glb,model/gltf-binary" hidden>
     <div class="note" id="glbNote">
@@ -539,68 +563,56 @@ window.addEventListener('error', ev => showErr(ev.error || ev.message));
 // blendshapes; the other two are premade fallbacks for the "bad selfie" path in
 // Miyagi's spec — they animate identically but have no face morphs.
 const MODELS = {
-  default: { url: './models/rpm/PreviewMesh.glb', rig: 'rpm', label: 'A', face: true },
-  premade1:{ url: './models/rpm/avatar-638e50b05a7d322604bbd0de.glb', rig: 'rpm', label: 'B', face: false },
-  premade2:{ url: './models/rpm/avatar-638e50b1d72bffc6fa18253f.glb', rig: 'rpm', label: 'C', face: false },
+  male:   { url: './models/rpm/XR.glb',        rig: 'rpm', label: 'Male',   parts: true  },
+  female: { url: './models/rpm/Feminine.glb',  rig: 'rpm', label: 'Female', parts: false },
 };
 
-// Miyagi's five, mapped onto the clip files. Names in the library are generic,
-// so these assignments are a first pass — swap the file to change a reaction.
+// Every material that can be coloured independently, in the order they appear
+// in the editor. The male body separates all of these; the female body ships as
+// ONE merged material (`Wolf3D_Avatar`), so she only supports a single overall
+// tint — a limitation of the free asset, not of the editor.
+const PARTS = [
+  { key: 'Wolf3D_Skin',            label: 'Skin'   },
+  { key: 'Wolf3D_Hair',            label: 'Hair'   },
+  { key: 'Wolf3D_Beard',           label: 'Beard'  },
+  { key: 'Wolf3D_Eye',             label: 'Eyes'   },
+  { key: 'Wolf3D_Outfit_Top',      label: 'Top'    },
+  { key: 'Wolf3D_Outfit_Bottom',   label: 'Bottom' },
+  { key: 'Wolf3D_Outfit_Footwear', label: 'Shoes'  },
+];
+const SKIN_ALSO = ['Wolf3D_Body'];        // body skin follows the face
+const COLOUR_KEY = 'sbj.colours.v1';
+
 // Miyagi's full list (29/08): Idle -> Dance 1 -> Dance 2 -> Laugh -> Point ->
-// Celebrate -> Angry -> Shake head -> Clap -> Win -> Lose.
-//
-// The library's filenames are meaningless, so every one of these was assigned by
-// RENDERING all 28 clips to a contact sheet and looking at them — see
-// sheet.html / contact-sheet.png. Regenerate that sheet to pick alternatives.
+// Celebrate -> Angry -> Shake head -> Clap -> Win -> Lose, plus the two moves
+// no library has. Assignments were made by rendering all 28 clips to a contact
+// sheet and looking at them — see sheet.html / contact-sheet.png.
 const CLIP_FILES = [
-  { label: 'Idle',       file: 'F_Standing_Idle_001',        icon: '\u{1F610}' }, // neutral stand
-  { label: 'Dance 1',    file: 'F_Dances_001',               icon: '\u{1F57A}' }, // loose two-step
-  { label: 'Dance 2',    file: 'F_Dances_004',               icon: '\u{1F483}' }, // bigger, leaning
-  { label: 'Laugh',      file: 'F_Talking_Variations_001',   icon: '\u{1F602}' }, // open, animated
-  { label: 'Point',      file: 'M_Standing_Expressions_017', icon: '\u{1F449}' }, // arm out, points
-  { label: 'Celebrate',  file: 'M_Standing_Expressions_010', icon: '\u{1F64C}' }, // both arms up
-  { label: 'Angry',      file: 'M_Standing_Expressions_012', icon: '\u{1F620}' }, // fists up, tense
-  { label: 'Shake head', file: 'M_Standing_Expressions_005', icon: '\u{1F645}' }, // arms out, "no"
-  { label: 'Clap',       file: 'M_Standing_Expressions_015', icon: '\u{1F44F}' }, // hands together
-  { label: 'Win',        file: 'M_Standing_Expressions_016', icon: '\u{1F3C6}' }, // fist raised high
-  { label: 'Lose',       file: 'M_Standing_Expressions_007', icon: '\u{1F614}' }, // slumped, head down
-  // hand-authored — not in any library, see AUTHORED
+  { label: 'Idle',       file: 'F_Standing_Idle_001',        icon: '\u{1F610}' },
+  { label: 'Dance 1',    file: 'F_Dances_001',               icon: '\u{1F57A}' },
+  { label: 'Dance 2',    file: 'F_Dances_004',               icon: '\u{1F483}' },
+  { label: 'Laugh',      file: 'F_Talking_Variations_001',   icon: '\u{1F602}' },
+  { label: 'Point',      file: 'M_Standing_Expressions_017', icon: '\u{1F449}' },
+  { label: 'Celebrate',  file: 'M_Standing_Expressions_010', icon: '\u{1F64C}' },
+  { label: 'Angry',      file: 'M_Standing_Expressions_012', icon: '\u{1F620}' },
+  { label: 'Shake head', file: 'M_Standing_Expressions_005', icon: '\u{1F645}' },
+  { label: 'Clap',       file: 'M_Standing_Expressions_015', icon: '\u{1F44F}' },
+  { label: 'Win',        file: 'M_Standing_Expressions_016', icon: '\u{1F3C6}' },
+  { label: 'Lose',       file: 'M_Standing_Expressions_007', icon: '\u{1F614}' },
   { label: 'Middle finger', authored: true, icon: '\u{1F595}' },
   { label: 'ROFL',          authored: true, icon: '\u{1F923}' },
 ];
 
-// The player's equipped taunts (Miyagi: "in profile user can choose from 3
-// moves to bring to table. Or 4").
-//
-// IMPORTANT: this limits only PLAYER-SENT reactions. Game events — win a hand,
-// play a BlackJack, lose — still fire their own animation regardless of the
-// loadout, because those are the game reacting, not the player choosing.
+// The player's equipped taunts. Limits PLAYER-SENT reactions only — game events
+// still fire their own animation regardless of what is equipped.
 const LOADOUT_MAX = 4;
 const LOADOUT_KEY = 'sbj.loadout.v1';
 let LOADOUT = ['Dance 1', 'Laugh', 'Point', 'Celebrate'];
 try {
   const saved = JSON.parse(localStorage.getItem(LOADOUT_KEY) || 'null');
   if (Array.isArray(saved) && saved.length) LOADOUT = saved.slice(0, LOADOUT_MAX);
-} catch {}                       // private mode / blocked storage: keep defaults
+} catch {}
 const saveLoadout = () => { try { localStorage.setItem(LOADOUT_KEY, JSON.stringify(LOADOUT)); } catch {} };
-
-// Facial expression per reaction. The avatar exposes mouthSmile, mouthOpen and
-// eyesClosed as morph targets, so reactions can actually show on the face
-// instead of being body language only. Values are targets; the face eases
-// toward them and back, and blinking runs on top.
-const FACES = {
-  'Idle':       { smile: .15, open: 0,   squint: 0   },
-  'Dance 1':    { smile: .55, open: .10, squint: 0   },
-  'Dance 2':    { smile: .60, open: .12, squint: 0   },
-  'Laugh':      { smile: .95, open: .45, squint: .25 },
-  'Point':      { smile: .30, open: .05, squint: 0   },
-  'Celebrate':  { smile: .90, open: .40, squint: .10 },
-  'Angry':      { smile: 0,   open: .15, squint: .45 },
-  'Shake head': { smile: .05, open: 0,   squint: .10 },
-  'Clap':       { smile: .60, open: .10, squint: 0   },
-  'Win':        { smile: 1,   open: .35, squint: .15 },
-  'Lose':       { smile: 0,   open: .08, squint: .50 },
-};
 
 // Miyagi's trigger moments (29/08): "win a hand, play a Black Jack, bring
 // someone back, win the game, send a reaction". These are what the real
@@ -644,6 +656,25 @@ const EFFECTS = {
   'Lose':  { kind: 'drop',  anchor: 'brow',  every: 420, dur: 1400 },
   'Laugh': { kind: 'drop',  anchor: 'brow',  every: 520, dur: 1200 },
   'ROFL':          { kind: 'drop',  anchor: 'brow', every: 300, dur: 1100 },
+};
+
+// Facial expression per reaction. The avatar exposes mouthSmile, mouthOpen and
+// eyesClosed as morph targets, so reactions show on the face rather than being
+// body language only. The face eases toward these and back; blinking runs on top.
+const FACES = {
+  'Idle':          { smile: .15, open: 0,   squint: 0   },
+  'Dance 1':       { smile: .55, open: .10, squint: 0   },
+  'Dance 2':       { smile: .60, open: .12, squint: 0   },
+  'Laugh':         { smile: .95, open: .45, squint: .25 },
+  'Point':         { smile: .30, open: .05, squint: 0   },
+  'Celebrate':     { smile: .90, open: .40, squint: .10 },
+  'Angry':         { smile: 0,   open: .15, squint: .45 },
+  'Shake head':    { smile: .05, open: 0,   squint: .10 },
+  'Clap':          { smile: .60, open: .10, squint: 0   },
+  'Win':           { smile: 1,   open: .35, squint: .15 },
+  'Lose':          { smile: 0,   open: .08, squint: .50 },
+  'Middle finger': { smile: 0,   open: .10, squint: .40 },
+  'ROFL':          { smile: 1,   open: .55, squint: .35 },
 };
 
 const CLIP_MAP = {
@@ -715,7 +746,7 @@ function resize() {
 // ── loading ────────────────────────────────────────────────────────────────
 const loader = new GLTFLoader();
 const cache = {};
-let avatars = [], currentModel = 'default', count = 1;
+let avatars = [], currentModel = 'male', count = 1;
 
 async function loadModel(k) {
   const m = MODELS[k];
@@ -1400,6 +1431,8 @@ $('seg-avatar').onclick = async e => {
   currentModel = b.dataset.m;
   setPressed('seg-avatar', 'm', currentModel);
   for (const c of $('picks').children) c.setAttribute('aria-pressed', String(c.dataset.m === currentModel));
+  setPressed('seg-body', 'm', currentModel);
+  renderEditor();
   $('loading').classList.remove('done');
   await build();
   $('loading').classList.add('done');
@@ -1580,11 +1613,27 @@ async function analyseSelfie(img) {
 
   // hair: straight up from the brow by ~40% of face height. Misses bald heads
   // and hats, which is why the result is shown for confirmation.
+  // Hair is sampled at several heights and to both SIDES of the skull, then the
+  // darkest sample wins. A single point above the brow fails on tied-back hair
+  // and shaved sides — it lands on forehead or background and returns pale.
   const brow = at(10), chin = at(152);
   const faceH = Math.abs(chin[1] - brow[1]);
-  const hairY = Math.max(2, brow[1] - faceH * 0.40);
-  const hair = medianColour(ctx, [[brow[0], hairY], [brow[0] - faceH * 0.15, hairY + faceH * 0.08],
-                                  [brow[0] + faceH * 0.15, hairY + faceH * 0.08]], Math.max(3, W * 0.010));
+  const L = at(234), Rr = at(454);                       // temples
+  const cands = [];
+  for (const up of [0.18, 0.30, 0.44]) {
+    const y = Math.max(2, brow[1] - faceH * up);
+    cands.push([brow[0], y], [L[0] + faceH * 0.05, y + faceH * 0.10],
+                              [Rr[0] - faceH * 0.05, y + faceH * 0.10]);
+  }
+  let hair = null;
+  for (const pt of cands) {
+    const c = medianColour(ctx, [pt], Math.max(3, W * 0.008));
+    if (!c) continue;
+    const lum = c.r * .299 + c.g * .587 + c.b * .114;
+    // ignore anything as light as the skin — that is forehead or background
+    if (skin && lum > (skin.r * .299 + skin.g * .587 + skin.b * .114) * 0.92) continue;
+    if (!hair || lum < (hair.r * .299 + hair.g * .587 + hair.b * .114)) hair = c;
+  }
   return { skin, hair };
 }
 
@@ -1611,9 +1660,11 @@ function textureAverage(mat) {
   return avg;
 }
 
-const SKIN_MATS = ['Wolf3D_Skin', 'Wolf3D_Body'];
-const HAIR_MATS = ['Wolf3D_Hair'];
-let personalisation = null;          // { skin, hair } or null
+// material name -> '#rrggbb'. The selfie writes into this; the editor overrides
+// it; both persist. One map means the two cannot disagree.
+let charColours = {};
+try { charColours = JSON.parse(localStorage.getItem(COLOUR_KEY) || '{}') || {}; } catch {}
+const saveColours = () => { try { localStorage.setItem(COLOUR_KEY, JSON.stringify(charColours)); } catch {} };
 
 function tintRoot(root) {
   const meshes = [];
@@ -1627,9 +1678,14 @@ function applyPersonalisation(av) {
     const mats = Array.isArray(m.material) ? m.material : [m.material];
     for (const mat of mats) {
       const name = mat.name || '';
-      const want = personalisation && (SKIN_MATS.includes(name) ? personalisation.skin
-                 : HAIR_MATS.includes(name) ? personalisation.hair : null);
-      if (!want) { if (mat.userData.tinted) { mat.color.setRGB(1, 1, 1); mat.userData.tinted = false; } continue; }
+      // the body shares the face's skin colour
+      const key = SKIN_ALSO.includes(name) ? 'Wolf3D_Skin' : name;
+      const hex = charColours[key];
+      if (!hex) {
+        if (mat.userData.tinted) { mat.color.setRGB(1, 1, 1); mat.userData.tinted = false; }
+        continue;
+      }
+      const want = new THREE.Color(hex);
       const avg = textureAverage(mat);
       mat.color.setRGB(
         THREE.MathUtils.clamp(want.r / Math.max(0.08, avg.r), 0.25, 2.2),
@@ -1640,6 +1696,56 @@ function applyPersonalisation(av) {
   }
   invalidate();
 }
+
+// ---- colour editor -------------------------------------------------------
+// Default swatch values come from the texture itself, so an untouched control
+// shows what the model actually looks like rather than an arbitrary colour.
+function defaultHexFor(key) {
+  for (const a of avatars) for (const m of a.meshes) {
+    const mats = Array.isArray(m.material) ? m.material : [m.material];
+    for (const mat of mats) if ((mat.name || '') === key) return '#' + textureAverage(mat).getHexString();
+  }
+  return '#888888';
+}
+
+function renderEditor() {
+  const wrap = $('editor');
+  const hasParts = MODELS[currentModel]?.parts;
+  wrap.innerHTML = '';
+  const list = hasParts ? PARTS : [{ key: 'Wolf3D_Avatar', label: 'Overall' }];
+  for (const { key, label } of list) {
+    const row = document.createElement('label');
+    row.className = 'swatch';
+    const inp = document.createElement('input');
+    inp.type = 'color';
+    inp.value = charColours[key] || defaultHexFor(key);
+    inp.oninput = () => {
+      charColours[key] = inp.value;
+      saveColours();
+      avatars.forEach(applyPersonalisation);
+      clearTimeout(inp._t); inp._t = setTimeout(renderMyCharacter, 220);
+    };
+    const txt = document.createElement('span');
+    txt.textContent = label;
+    row.append(inp, txt);
+    wrap.appendChild(row);
+  }
+  $('editorNote').innerHTML = hasParts
+    ? 'Tap a swatch to change that part. Saved on this device.'
+    : '<b>The female body ships as one merged material</b>, so only an overall tint ' +
+      'is possible on it \u2014 a limit of the free asset, not the editor. The male body ' +
+      'separates skin, hair, beard, eyes and all three clothing pieces.';
+}
+
+$('seg-body').onclick = async e => {
+  const btn = e.target.closest('button'); if (!btn) return;
+  currentModel = btn.dataset.m;
+  setPressed('seg-body', 'm', currentModel);
+  $('loading').classList.remove('done');
+  await build();
+  $('loading').classList.add('done');
+  renderEditor(); renderMyCharacter();
+};
 
 // ---- avatar setup sheet ----
 const sheet = $('sheet');
@@ -1666,8 +1772,11 @@ $('selfie').onchange = async e => {
       note.innerHTML = `<b>No face found.</b> Try a clearer, front-facing photo \u2014 or pick a character below.`;
       return;
     }
-    personalisation = out;
+    charColours['Wolf3D_Skin'] = '#' + out.skin.getHexString();
+    if (out.hair) charColours['Wolf3D_Hair'] = '#' + out.hair.getHexString();
+    saveColours();
     avatars.forEach(applyPersonalisation);
+    renderEditor();
     await renderMyCharacter();
     const hex = c => '#' + c.getHexString();
     note.innerHTML = `Matched your colouring \u2014 ` +
@@ -1676,9 +1785,9 @@ $('selfie').onchange = async e => {
       `Nothing left your phone. <a href="#" id="resetTint" style="color:var(--lime)">Undo</a>`;
     $('resetTint').onclick = ev => {
       ev.preventDefault();
-      personalisation = null;
+      charColours = {}; saveColours();
       avatars.forEach(applyPersonalisation);
-      renderMyCharacter();
+      renderEditor(); renderMyCharacter();
       note.textContent = 'Colouring reset.';
     };
   } catch (err) {
@@ -1717,9 +1826,11 @@ $('picks').onclick = async e => {
   for (const c of $('picks').children) c.setAttribute('aria-pressed', String(c === p));
   currentModel = p.dataset.m;
   setPressed('seg-avatar', 'm', currentModel);
+  setPressed('seg-body', 'm', currentModel);
   $('loading').classList.remove('done');
   await build();
   $('loading').classList.add('done');
+  renderEditor(); renderMyCharacter();
 };
 
 $('run-bench').onclick = runBench;
@@ -1748,6 +1859,7 @@ renderQuickbar();
   try {
     resize(); await build(); fadeIdentityForSize();
     $('loading').classList.add('done');
+    renderEditor();
     requestAnimationFrame(tick);
   } catch (e) { showErr(e); }
 })();

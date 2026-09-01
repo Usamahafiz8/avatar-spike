@@ -263,6 +263,36 @@ This costs nothing per user: clips are shared files, so a loadout is just a
 list of names on the profile. It is also the natural shape for a premium
 unlock — more slots, or moves that have to be earned.
 
+## Character editor
+
+Two bodies and per-part colour, in the setup sheet.
+
+| Body | Materials | Expressions | Editable |
+|------|-----------|-------------|----------|
+| **Male** (`RPM_Template_Mesh_XR`) | 9 separate | 52 ARKit | skin, hair, beard, eyes, top, bottom, shoes |
+| **Female** (`Feminine_TPose`) | **1 merged** | none | overall tint only |
+
+The male body is the only free RPM asset that separates its materials, so it is
+the only one an editor can actually drive. The female ships as a single
+`Wolf3D_Avatar` material — tinting her hair would tint her skin and clothes with
+it — and carries no morph targets, so she has no facial expressions either. The
+sheet says so rather than hiding it.
+
+Colours live in one map (material name -> hex) that both the selfie and the
+editor write to, so the two can never disagree. Saved per device.
+
+### What cannot be edited, and why
+
+**Nose, lips, face shape and body are not adjustable.** Checked across every
+free RPM asset — PreviewMesh, both Unity avatars, both TPose bodies, and the XR
+template. The XR template has 240 morph targets, but all 52 distinct names are
+**ARKit expressions** (`browDownLeft`, `jawForward`, `noseSneerLeft`,
+`mouthPucker`…). There is not one shape morph — no `noseWidth`, no `jawWidth`.
+
+The data simply is not in the files. RPM's own creator does that work and
+exports a finished character. Face-shape control is exactly what an avatar
+vendor sells, and no amount of engineering substitutes for it.
+
 ## Selfie personalisation — no vendor account
 
 The selfie step is **live**, and needs no avatar vendor. MediaPipe

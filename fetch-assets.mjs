@@ -16,14 +16,15 @@ const RAW  = 'https://raw.githubusercontent.com/readyplayerme';
 
 // avatar bodies -------------------------------------------------------------
 const AVATARS = [
-  // the only reachable full-body RPM asset WITH facial blendshapes
-  ['models/rpm/PreviewMesh.glb',
-   `${RAW}/rpm-unity-sdk-core/HEAD/Samples~/QuickStart/PreviewAvatar/PreviewMesh.glb`],
-  // premade fallbacks for the "bad selfie" path (no morph targets)
-  ['models/rpm/avatar-638e50b05a7d322604bbd0de.glb',
-   `${RAW}/Unity-Loadtest/HEAD/Assets/Ready%20Player%20Me/Avatars/638e50b05a7d322604bbd0de/8dcd3e99ff7f4f56da36a3e2cf0b7091/638e50b05a7d322604bbd0de.glb`],
-  ['models/rpm/avatar-638e50b1d72bffc6fa18253f.glb',
-   `${RAW}/Unity-Loadtest/HEAD/Assets/Ready%20Player%20Me/Avatars/638e50b1d72bffc6fa18253f/8dcd3e99ff7f4f56da36a3e2cf0b7091/638e50b1d72bffc6fa18253f.glb`],
+  // Male: the only free RPM asset with 9 SEPARATE materials (skin, hair, beard,
+  // eyes, top, bottom, shoes) plus 52 ARKit expressions — so it is the only one
+  // a colour editor can actually drive.
+  ['models/rpm/XR.glb',
+   `${RAW}/rpm-unity-sdk-core/HEAD/Runtime/Core/Models/RPM_Template_Mesh_XR.glb`],
+  // Female: ships as ONE merged material and zero morph targets, so she takes
+  // only an overall tint and has no facial expressions. A limit of the asset.
+  ['models/rpm/Feminine.glb',
+   'https://cdn.jsdelivr.net/gh/readyplayerme/animation-library@master/feminine/glb/Feminine_TPose.glb'],
 ];
 
 // animation clips -----------------------------------------------------------
